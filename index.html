@@ -42,6 +42,7 @@
   <div class="post-grid">
 
     <a class="card" href="posts/interactivity-accordion.html">
+      <div class="card-thumb"><img src="assets/img/01-source-confirmed.png" alt="Terminal capture: the stored payload confirmed in the served page." loading="lazy"></div>
       <div class="c-tag">WordPress · Stored XSS · Lab-verified · Part I</div>
       <h2>The Accordion That Opened a Door</h2>
       <p>WordPress's server-side HTML writer enforces URL policy; the client-side Interactivity API enforces none. An Author smuggles <code>javascript:</code> through a <code>data-wp-context</code> blob, the served page stays clean, and one administrator click turns a guest-writer account into administrator authority.</p>
@@ -53,6 +54,7 @@
     </a>
 
     <a class="card" href="posts/click-to-root.html">
+      <div class="card-thumb"><img src="assets/img/rce/03-rce-exfil.png" alt="Capture: the webshell response and outbound callback proving command execution." loading="lazy"></div>
       <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified · Part II</div>
       <h2>The Click That Ended at uid=0</h2>
       <p>The same six lines of markup, followed further. An Administrator's plugin editor is a keyboard with admin hands on it: the XSS harvests the editor nonce, writes a PHP webshell over <code>hello.php</code>, and the next request returns root — proven by a changed file hash and an outbound callback.</p>
@@ -64,6 +66,7 @@
     </a>
 
     <a class="card" href="posts/dispatcher-cache.html">
+      <div class="card-thumb"><img src="assets/img/aem/01-cache-hit.png" alt="Lab terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache." loading="lazy"><span class="play">&#9654; 34s clip</span></div>
       <div class="c-tag">Adobe AEM · Dispatcher cache · Field finding</div>
       <h2>The Cache That Remembered a Stranger</h2>
       <p>A per-session endpoint on AEM author tiers answered anonymous requests with someone else's identity — login identifier, display name, internal user path. Five hosts, two customers, four dispatchers. The cached answers were nine to twenty-one months old.</p>
