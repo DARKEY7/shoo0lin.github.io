@@ -192,7 +192,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
       </ul>
 
       <figure>
-        <img src="../assets/img/aem/02-cache-miss.png" alt="Terminal output showing the query-string cache miss returning 401, the wrong-cookie request still served from cache, and two neighbour paths challenging." loading="lazy" width="1500" height="1226">
+        <img src="../assets/img/aem/02-cache-miss.png" alt="Terminal output showing the query-string cache miss returning 401, the wrong-cookie request still served from cache, and two neighbour paths challenging." width="1500" height="1226">
         <figcaption><b>The controls, from the local lab.</b> The query string changes the cache key, so the request reaches the origin and the origin says <code>401</code>; a bogus cookie changes nothing because the cookie is not in the key; the sibling paths in the same directory still challenge. Same three observations as the field, reproduced without touching a customer system.</figcaption>
       </figure>
 
@@ -319,7 +319,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
 }</code><button class="copy">copy</button></pre>
 
       <figure>
-        <img src="../assets/img/aem/03-patched.png" alt="Terminal output showing the patched dispatcher returning 401 for both the exact path and the query-string variant." loading="lazy" width="1500" height="766">
+        <img src="../assets/img/aem/03-patched.png" alt="Terminal output showing the patched dispatcher returning 401 for both the exact path and the query-string variant." width="1500" height="766">
         <figcaption><b>After the deny rule.</b> No cache entry is created, so both the exact path and the query-string variant go to the origin, and the origin's authentication policy applies to every anonymous request. This is <code>lab/reproduce.py</code> in <code>patched</code> mode.</figcaption>
       </figure>
 
@@ -350,7 +350,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
       </div>
 
       <figure>
-        <img src="../assets/img/aem/04-field-fleet.png" alt="Table of five AEM hosts with environment, dispatcher instance and cache age, all names redacted." loading="lazy" width="1500" height="640">
+        <img src="../assets/img/aem/04-field-fleet.png" alt="Table of five AEM hosts with environment, dispatcher instance and cache age, all names redacted." width="1500" height="640">
         <figcaption><b>The fleet at capture, 2026-06-30.</b> Five hosts, two customers, four dispatcher instances, two AWS regions, four environments. Cache ages run from about nine months to about twenty-one. Identities and instance suffixes redacted; the unredacted table is in the vendor report.</figcaption>
       </figure>
 
