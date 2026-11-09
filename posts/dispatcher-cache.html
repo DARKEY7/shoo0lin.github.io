@@ -33,14 +33,13 @@
 <main>
   <div class="wrap">
     <header class="article-head">
-      <div class="c-tag">Adobe AEM · Cache misconfiguration · Disclosed</div>
+      <div class="c-tag">Adobe AEM · Cache misconfiguration · Field finding</div>
       <h1>The Cache That Remembered a Stranger</h1>
       <p class="dek">One endpoint on an Adobe Experience Manager author tier answered a question no anonymous visitor should be able to ask — and answered it with someone else's name. It had been holding that answer for twenty months.</p>
       <div class="byline">
         <span>9 Nov 2026</span>
         <span>16 min read</span>
         <span>CVSS 3.1 · 5.3 Medium</span>
-        <span>Adobe HackerOne · triaged</span>
       </div>
     </header>
   </div>
@@ -58,7 +57,7 @@
 
       <div class="note">
         <b>What is redacted here</b>
-        Customer names, login identifiers, real names, JCR node IDs, and dispatcher instance suffixes have been replaced. The hosts were still serving the cached responses on 29 October 2026, and publishing a working list of "anonymous identity oracles" would be exactly the harm I am writing about. The unredacted values are in the Adobe HackerOne report and I will share them with anyone who needs them for remediation.
+        Customer names, login identifiers, real names, JCR node IDs, and dispatcher instance suffixes have been replaced. The hosts were still serving the cached responses on 29 October 2026, and publishing a working list of "anonymous identity oracles" would be exactly the harm I am writing about. The unredacted values are in the vendor report and I will share them with anyone who needs them for remediation.
       </div>
 
       <figure>
@@ -356,7 +355,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
 
       <p>On method, because it matters when the targets are somebody else's production systems: the entire run was a single unauthenticated <code>GET</code> per host and per path, with no concurrency, no fuzzing, no authentication attempts, and no attempt to flush or poison anything. I did not try a password against any account I found. Finding a login identifier and then spraying it is how a Medium becomes an incident, and it is not necessary to prove the finding.</p>
 
-      <p>Timeline, so far: found in June 2026 while mapping AMS author tiers; reported to Adobe with the unredacted host list and responses; triaged with Hall of Fame credit. Still live when I last checked, on 29 October 2026 — same five paths, same five bodies, same <code>Last-Modified</code> dates. This page publishes the mechanism with identities and hostnames redacted, because "still serving the data" was true at publication time. If Adobe or the affected customers confirm remediation, I will publish the full values and update this note.</p>
+      <p>Timeline, so far: found in June 2026 while mapping AMS author tiers; reported to Adobe with the unredacted host list and responses. Still live when I last checked, on 29 October 2026 — same five paths, same five bodies, same <code>Last-Modified</code> dates. This page publishes the mechanism with identities and hostnames redacted, because "still serving the data" was true at publication time. If Adobe or the affected customers confirm remediation, I will publish the full values and update this note.</p>
 
       <p>Two lessons, and then I will stop. First: <strong>an origin and its cache are two different security boundaries</strong>, and hardening one says nothing about the other. The AEM instances here were fine. The thing in front of them had been holding a stranger's name for twenty months. Second: <strong>the cache key is a security control</strong>. Every field a response depends on has to be in it, and "who is asking" is the easiest field in the world to forget.</p>
 
@@ -364,7 +363,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
 
       <hr>
 
-      <p style="color:var(--faint);font-size:14px">Disclosure status: reported to Adobe (HackerOne, triaged). Identities, hostnames, and internal paths are redacted here and in the public copy of this page; the unredacted evidence is with the vendor. No customer data beyond the identity fields described was accessed, and no authentication was attempted. This page will be updated when remediation is confirmed. The reproduction — mock origin, mock dispatcher, vulnerable and patched configurations, plus the redacting field probe — is at <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">github.com/shoo0lin/aem-dispatcher-cache-leak</a>.</p>
+      <p style="color:var(--faint);font-size:14px">Identities, hostnames, and internal paths are redacted here and in the public copy of this page. No customer data beyond the identity fields described was accessed, and no authentication was attempted. The reproduction — mock origin, mock dispatcher, vulnerable and patched configurations, plus the redacting field probe — is at <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">github.com/shoo0lin/aem-dispatcher-cache-leak</a>.</p>
 
       <hr>
       <p class="next"><a href="click-to-root.html">← Read the lab series: The Click That Ended at uid=0</a></p>
