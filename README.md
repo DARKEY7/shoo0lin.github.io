@@ -9,10 +9,15 @@
 ![Disclosure](https://img.shields.io/badge/upstream-pending-9aa3b2?style=flat-square)
 
 A static site built by hand — no framework, no trackers, no external fonts — and the
-long-form write-ups behind it. The first one is a stored XSS in WordPress's Interactivity
-API that escalates an Author to Administrator authority with a single click.
+long-form write-ups behind it. The series in progress is a stored XSS in WordPress's
+Interactivity API that escalates an Author to Administrator authority with a single click.
 
-**Read it here → [shoo0lin.github.io/posts/interactivity-accordion.html](https://shoo0lin.github.io/posts/interactivity-accordion.html)**
+## Posts
+
+| # | Title | What it covers |
+|---|---|---|
+| I | [The Accordion That Opened a Door](https://shoo0lin.github.io/posts/interactivity-accordion.html) | The client/server URL-policy mismatch; stored XSS; 62-capability read and an admin write after one click. CVSS ≈ 8.8. |
+| II | [The Click That Ended at uid=0](https://shoo0lin.github.io/posts/click-to-root.html) | The same primitive pushed through the admin plugin editor: nonce harvest → `hello.php` overwrite → command execution, confirmed by hash and by an outbound callback. |
 
 ---
 
@@ -287,10 +292,12 @@ el.setAttribute( attribute, result );
 .
 ├── index.html                              # home / post index
 ├── posts/
-│   └── interactivity-accordion.html        # the full write-up
+│   ├── interactivity-accordion.html        # part I — the primitive
+│   └── click-to-root.html                  # part II — escalation to RCE
 ├── assets/
 │   ├── css/style.css                       # one hand-written stylesheet
 │   └── img/                                # lab screenshots (redacted)
+│       └── rce/                            # part II captures + 42s demo clip
 ├── .nojekyll                               # serve files as-is
 └── README.md
 ```

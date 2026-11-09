@@ -41,13 +41,24 @@
   <div class="post-grid">
 
     <a class="card" href="posts/interactivity-accordion.html">
-      <div class="c-tag">WordPress · Stored XSS · Lab-verified</div>
+      <div class="c-tag">WordPress · Stored XSS · Lab-verified · Part I</div>
       <h2>The Accordion That Opened a Door</h2>
       <p>WordPress's server-side HTML writer enforces URL policy; the client-side Interactivity API enforces none. An Author smuggles <code>javascript:</code> through a <code>data-wp-context</code> blob, the served page stays clean, and one administrator click turns a guest-writer account into administrator authority.</p>
       <div class="c-meta">
         <span>9 Nov 2026</span>
         <span>14 min read</span>
         <span>CVSS ≈ 8.8 High</span>
+      </div>
+    </a>
+
+    <a class="card" href="posts/click-to-root.html">
+      <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified · Part II</div>
+      <h2>The Click That Ended at uid=0</h2>
+      <p>The same six lines of markup, followed further. An Administrator's plugin editor is a keyboard with admin hands on it: the XSS harvests the editor nonce, writes a PHP webshell over <code>hello.php</code>, and the next request returns root — proven by a changed file hash and an outbound callback.</p>
+      <div class="c-meta">
+        <span>9 Nov 2026</span>
+        <span>12 min read</span>
+        <span>Full site takeover</span>
       </div>
     </a>
 
