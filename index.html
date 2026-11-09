@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>shoo0lin — notes from the seam</title>
+<meta name="description" content="Field notes on web security: client/server policy mismatches, cross-origin bugs, and the seams where two components disagree about the same value.">
+<meta property="og:title" content="shoo0lin — notes from the seam">
+<meta property="og:description" content="Field notes on web security, written as the hunts actually happened.">
+<meta property="og:url" content="https://shoo0lin.github.io/">
+<meta property="og:image" content="https://shoo0lin.github.io/assets/img/03-admin-vs-anon.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="dot"></span>shoo0lin<span class="slash">/</span>notes</a>
+    <nav class="nav">
+      <a href="#posts">Posts</a>
+      <a href="#about">About</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero wrap">
+  <span class="kicker">security research · field notes</span>
+  <h1>Notes from the seam<br>between <em>server</em> and browser.</h1>
+  <p class="lede">I hunt the places where two components disagree about the same value — where the filter says no, the framework says yes, and the page looks clean right up until the click.</p>
+  <div class="hero-meta">
+    <span>Bugs found in labs &amp; disclosed responsibly</span>
+    <span>No inflated severities</span>
+    <span>Receipts attached</span>
+  </div>
+</section>
+
+<main class="wrap" id="posts">
+  <div class="post-grid">
+
+    <a class="card" href="posts/interactivity-accordion.html">
+      <div class="c-tag">WordPress · Stored XSS · Lab-verified</div>
+      <h2>The Accordion That Opened a Door</h2>
+      <p>WordPress's server-side HTML writer enforces URL policy; the client-side Interactivity API enforces none. An Author smuggles <code>javascript:</code> through a <code>data-wp-context</code> blob, the served page stays clean, and one administrator click turns a guest-writer account into administrator authority.</p>
+      <div class="c-meta">
+        <span>9 Nov 2026</span>
+        <span>14 min read</span>
+        <span>CVSS ≈ 8.8 High</span>
+      </div>
+    </a>
+
+  </div>
+
+  <section id="about" style="padding-bottom:80px">
+    <h2 style="font-family:var(--serif);font-size:28px;margin:0 0 12px">About these notes</h2>
+    <p style="color:var(--muted);max-width:680px;margin:0 0 14px">Each post is a hunt written the way it happened: the wrong first hypothesis, the control that killed it, the evidence that survived. Everything is reproduced in an isolated lab unless stated otherwise, and every severity claim is separated from the impact proof on purpose.</p>
+    <p style="color:var(--muted);max-width:680px;margin:0">Corrections and replications are welcome — open an issue on <a href="https://github.com/shoo0lin" rel="me">GitHub</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 shoo0lin</span>
+    <span>Built by hand. No trackers, no fonts, no analytics.</span>
+  </div>
+</footer>
+
+</body>
+</html>
