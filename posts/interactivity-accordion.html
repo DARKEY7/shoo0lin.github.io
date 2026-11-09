@@ -24,6 +24,7 @@
       <a href="../index.html">Posts</a>
       <a href="#tldr">TL;DR</a>
       <a href="#fix">The fix</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin/wp-interactivity-xss">PoC repo</a>
       <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
     </nav>
   </div>
@@ -52,6 +53,11 @@
         <p>WordPress core's server-side HTML writer enforces URL policy. The client-side Interactivity API directive resolver enforces <em>none</em>. A Contributor or Author can therefore smuggle <code>javascript:</code> inside a <code>data-wp-context</code> JSON blob — the exact scheme <code>wp_kses_post()</code> strips from a normal <code>href</code> on the same tag — and the client re-injects it into the live <code>href</code> at hydration.</p>
         <p>The served HTML looks clean. A <code>curl</code> says the page is safe. A real browser says otherwise. One click by an Administrator executes the payload in the Administrator's own origin and with the Administrator's own session.</p>
         <p class="win" style="border:0;padding:0;margin:0;background:none;color:var(--text)">Demonstrated end-to-end in an isolated local lab: read the admin identity and all 62 capabilities, create a post as the admin, read it back, force-delete it. Anonymous control on the same payload: <code>401</code>, no write. Not tested against production — read the scope note before the pitchforks.</p>
+      </div>
+
+      <div class="note">
+        <b>Code and evidence</b>
+        The full lab harness is public: <a href="https://github.com/shoo0lin/wp-interactivity-xss">github.com/shoo0lin/wp-interactivity-xss</a> — disposable Docker lab, the validator, the escalation chains, captured JSON, and the patched directive. Lab only; point it at a box you own.
       </div>
 
       <nav class="toc" aria-label="Contents">

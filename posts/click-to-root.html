@@ -28,6 +28,7 @@
       <a href="../index.html">Posts</a>
       <a href="#tldr">TL;DR</a>
       <a href="#fix">The fix</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin/wp-interactivity-xss">PoC repo</a>
       <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
     </nav>
   </div>
@@ -57,6 +58,11 @@
         <p>The <a href="interactivity-accordion.html">first post</a> showed that a below-<code>unfiltered_html</code> Author can store <code>javascript:</code> inside a <code>data-wp-context</code> blob and get it re-injected into the live <code>href</code> after hydration. One Administrator click runs attacker JS in the Administrator's origin.</p>
         <p>This post answers the question that follows: <em>what does that authority actually buy?</em> In the lab, it bought the plugin editor. The XSS harvested the editor's nonce, wrote a one-line PHP webshell over <code>hello.php</code>, and the next HTTP request returned <code>uid=0(root)</code>.</p>
         <p style="color:var(--text)">Two independent proofs: a file hash that changed and then restored, and an outbound callback from the WordPress host to an attacker listener carrying the command output. Not a local echo.</p>
+      </div>
+
+      <div class="note">
+        <b>Code and evidence</b>
+        Re-run the whole chain from a clean lab: <a href="https://github.com/shoo0lin/wp-interactivity-xss">github.com/shoo0lin/wp-interactivity-xss</a>. It includes the provisioning script, the validator, both escalation chains, the C2 listener, the captured JSON, and the patched <code>bind.ts</code>. Lab only.
       </div>
 
       <nav class="toc" aria-label="Contents">

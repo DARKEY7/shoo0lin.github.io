@@ -19,6 +19,14 @@ Interactivity API that escalates an Author to Administrator authority with a sin
 | I | [The Accordion That Opened a Door](https://shoo0lin.github.io/posts/interactivity-accordion.html) | The client/server URL-policy mismatch; stored XSS; 62-capability read and an admin write after one click. CVSS ≈ 8.8. |
 | II | [The Click That Ended at uid=0](https://shoo0lin.github.io/posts/click-to-root.html) | The same primitive pushed through the admin plugin editor: nonce harvest → `hello.php` overwrite → command execution, confirmed by hash and by an outbound callback. |
 
+## Runnable PoC
+
+The lab harness behind both posts lives in a separate repository:
+
+**[shoo0lin/wp-interactivity-xss](https://github.com/shoo0lin/wp-interactivity-xss)** — disposable
+WordPress 7.1.2 Docker lab, minimal validator, two escalation chains, C2 listener, captured
+evidence, and the patched `bind.ts`. Lab only.
+
 ---
 
 ## The bug in one sentence
