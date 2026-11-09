@@ -24,11 +24,14 @@ AEM author tiers.
 
 ## Runnable PoC
 
-The lab harness behind both posts lives in a separate repository:
+The harnesses behind the posts live in separate repositories:
 
-**[shoo0lin/wp-interactivity-xss](https://github.com/shoo0lin/wp-interactivity-xss)** — disposable
-WordPress 7.1.2 Docker lab, minimal validator, two escalation chains, C2 listener, captured
-evidence, and the patched `bind.ts`. Lab only.
+- **[shoo0lin/wp-interactivity-xss](https://github.com/shoo0lin/wp-interactivity-xss)** — disposable
+  WordPress 7.1.2 Docker lab, minimal validator, two escalation chains, C2 listener, captured
+  evidence, and the patched `bind.ts`. Lab only.
+- **[shoo0lin/aem-dispatcher-cache-leak](https://github.com/shoo0lin/aem-dispatcher-cache-leak)** —
+  mock AEM origin and mock Apache Dispatcher in both vulnerable and patched configurations,
+  a self-checking reproduction, and the redacting field probe. No customer data; no host list.
 
 ---
 
@@ -309,6 +312,7 @@ el.setAttribute( attribute, result );
 ├── assets/
 │   ├── css/style.css                       # one hand-written stylesheet
 │   └── img/                                # lab screenshots (redacted)
+│       ├── aem/                            # dispatcher lab stills + 34s demo clip
 │       └── rce/                            # part II captures + 42s demo clip
 ├── .nojekyll                               # serve files as-is
 └── README.md

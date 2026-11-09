@@ -10,8 +10,9 @@
 <meta property="og:title" content="The Cache That Remembered a Stranger">
 <meta property="og:description" content="A per-session AEM endpoint answered anonymous requests with someone else's identity. Five hosts, two customers, four dispatchers, two regions — and cache entries up to twenty-one months old.">
 <meta property="og:url" content="https://shoo0lin.github.io/posts/dispatcher-cache.html">
-<meta property="og:image" content="https://shoo0lin.github.io/assets/img/03-admin-vs-anon.png">
+<meta property="og:image" content="https://shoo0lin.github.io/assets/img/aem/01-cache-hit.png">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://shoo0lin.github.io/assets/img/aem/01-cache-hit.png">
 <link rel="stylesheet" href="../assets/css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
 </head>
@@ -60,12 +61,20 @@
         Customer names, login identifiers, real names, JCR node IDs, and dispatcher instance suffixes have been replaced. The hosts were still serving the cached responses on 29 October 2026, and publishing a working list of "anonymous identity oracles" would be exactly the harm I am writing about. The unredacted values are in the Adobe HackerOne report and I will share them with anyone who needs them for remediation.
       </div>
 
+      <figure>
+        <video controls preload="metadata" playsinline poster="../assets/img/aem/demo-poster.jpg">
+          <source src="../assets/img/aem/demo-cache-leak.mp4" type="video/mp4">
+          Your browser does not support the video tag. The stills below cover the same three steps.
+        </video>
+        <figcaption><b>Local reproduction, 33 seconds.</b> A mock AEM origin and a mock Apache Dispatcher, in the broken configuration and then the patched one. The whole run is <code>lab/reproduce.py</code> from <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">the repro repository</a> — no customer system was contacted for this clip, and no real identity appears in it.</figcaption>
+      </figure>
+
       <nav class="toc" aria-label="Contents">
         <div class="t">Contents</div>
         <ol>
           <li><a href="#question">A question with an answer it shouldn't have</a></li>
           <li><a href="#tier">What an author tier is for</a></li>
-          <li><a href="#one-path">One path out of thirteen</a></li>
+          <li><a href="#one-path">One path out of five</a></li>
           <li><a href="#proof">Proving the cache did it</a></li>
           <li><a href="#fleet">One host is an accident</a></li>
           <li><a href="#worth">What an identity is worth</a></li>
@@ -129,7 +138,7 @@
 
       <p>For context, AEM's own answer for an anonymous session is <code>{"anonymous":"anonymous"}</code> — I have seen it on other AEM installs. There is no ambiguity about what the endpoint is supposed to return when nobody is asking on their own behalf. The response I got named a real account.</p>
 
-      <h2 id="one-path"><span class="ch">Chapter 2</span>One path out of thirteen</h2>
+      <h2 id="one-path"><span class="ch">Chapter 2</span>One path out of five</h2>
 
       <p>Before believing a single endpoint, I checked its neighbours. If an author tier is simply open, everything answers. If one rule is wrong, exactly one thing answers and everything else keeps saying "log in".</p>
 
@@ -150,7 +159,7 @@
 
       <p>This is the control that kills the laziest explanation. If the author tier were exposed by a missing authentication filter, <code>profile.json</code> would be readable too — and it is not. If the whole vhost were public, <code>userinfo.json</code> would answer — and it does not. The behaviour is path-specific, which points at a cache rule, because a cache rule is path-specific by nature.</p>
 
-      <p>I ran the same five probes on the other hosts. Same shape, every time: one <code>200</code>, four challenges.</p>
+      <p>That matrix is from the first host, where I ran the full set. On the other four I repeated the two checks that matter — the cached path and, where recorded, the query-string control — and got the same shape. I am not going to claim a five-path matrix I did not run on every host.</p>
 
       <h2 id="proof"><span class="ch">Chapter 3</span>Proving the cache did it</h2>
 
@@ -181,6 +190,11 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
         <li><strong>Accept, cookies, and <code>Authorization</code> do not vary the response.</strong> Sending an invalid bearer token, a junk cookie, or <code>Accept: text/html</code> all return the same cached JSON. The cache key is the path. Nothing about the caller is part of it.</li>
         <li><strong>Path aliases hit the same object.</strong> The clientlibs proxy form — <code>/etc.clientlibs/../libs/granite/security/currentuser.json</code> — returns the identical body, which tells you the key is the <em>normalised</em> path, not the literal request line.</li>
       </ul>
+
+      <figure>
+        <img src="../assets/img/aem/02-cache-miss.png" alt="Terminal output showing the query-string cache miss returning 401, the wrong-cookie request still served from cache, and two neighbour paths challenging." loading="lazy" width="1500" height="1226">
+        <figcaption><b>The controls, from the local lab.</b> The query string changes the cache key, so the request reaches the origin and the origin says <code>401</code>; a bogus cookie changes nothing because the cookie is not in the key; the sibling paths in the same directory still challenge. Same three observations as the field, reproduced without touching a customer system.</figcaption>
+      </figure>
 
       <div class="note">
         <b>The header that looks like a fix and isn't</b>
@@ -304,6 +318,11 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
   }
 }</code><button class="copy">copy</button></pre>
 
+      <figure>
+        <img src="../assets/img/aem/03-patched.png" alt="Terminal output showing the patched dispatcher returning 401 for both the exact path and the query-string variant." loading="lazy" width="1500" height="766">
+        <figcaption><b>After the deny rule.</b> No cache entry is created, so both the exact path and the query-string variant go to the origin, and the origin's authentication policy applies to every anonymous request. This is <code>lab/reproduce.py</code> in <code>patched</code> mode.</figcaption>
+      </figure>
+
       <p><strong>2. If you must cache a session-aware path, key it by session.</strong> <code>/sessionmanagement</code> with the login token header is the documented mechanism. For an author tier the better answer is usually "don't cache it at all" — author traffic is low-volume and internal, and the cache buys little.</p>
 
       <p><strong>3. Audit the rest of the allow list with one question.</strong> For every path that may be cached: does the response change based on who is asking, or on any header other than the ones in the cache key? <code>currentuser.json</code> was the one that failed here, but it is rarely the only user-contextual endpoint in a CMS.</p>
@@ -322,12 +341,18 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
           <tbody>
             <tr><td>Five <code>200</code> responses</td><td>Anonymous identity disclosure, one per host, byte-stable across days</td></tr>
             <tr><td>Cache-miss pair per host</td><td><code>?_=1</code> → <code>401</code>/<code>302</code>; the origin refuses when it is actually consulted</td></tr>
-            <tr><td>Neighbour matrix</td><td>Four other protected paths correctly challenged on every host</td></tr>
+            <tr><td>Neighbour matrix</td><td>Four other protected paths correctly challenged on the first host</td></tr>
             <tr><td>Header set</td><td><code>X-Dispatcher</code>, <code>X-Vhost: author</code>, <code>Last-Modified</code> from 2024–2025</td></tr>
             <tr><td>Fleet table</td><td>2 customers, 4 dispatchers, 2 regions, 4 environments, 9–21 months stale</td></tr>
+            <tr><td><a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">Reproducer + lab</a></td><td>Self-contained mock origin and dispatcher, vulnerable and patched; redacting field probe</td></tr>
           </tbody>
         </table>
       </div>
+
+      <figure>
+        <img src="../assets/img/aem/04-field-fleet.png" alt="Table of five AEM hosts with environment, dispatcher instance and cache age, all names redacted." loading="lazy" width="1500" height="640">
+        <figcaption><b>The fleet at capture, 2026-06-30.</b> Five hosts, two customers, four dispatcher instances, two AWS regions, four environments. Cache ages run from about nine months to about twenty-one. Identities and instance suffixes redacted; the unredacted table is in the vendor report.</figcaption>
+      </figure>
 
       <p>On method, because it matters when the targets are somebody else's production systems: the entire run was a single unauthenticated <code>GET</code> per host and per path, with no concurrency, no fuzzing, no authentication attempts, and no attempt to flush or poison anything. I did not try a password against any account I found. Finding a login identifier and then spraying it is how a Medium becomes an incident, and it is not necessary to prove the finding.</p>
 
@@ -339,7 +364,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
 
       <hr>
 
-      <p style="color:var(--faint);font-size:14px">Disclosure status: reported to Adobe (HackerOne, triaged). Identities, hostnames, and internal paths are redacted here and in the public copy of this page; the unredacted evidence is with the vendor. No customer data beyond the identity fields described was accessed, and no authentication was attempted. This page will be updated when remediation is confirmed.</p>
+      <p style="color:var(--faint);font-size:14px">Disclosure status: reported to Adobe (HackerOne, triaged). Identities, hostnames, and internal paths are redacted here and in the public copy of this page; the unredacted evidence is with the vendor. No customer data beyond the identity fields described was accessed, and no authentication was attempted. This page will be updated when remediation is confirmed. The reproduction — mock origin, mock dispatcher, vulnerable and patched configurations, plus the redacting field probe — is at <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">github.com/shoo0lin/aem-dispatcher-cache-leak</a>.</p>
 
       <hr>
       <p class="next"><a href="click-to-root.html">← Read the lab series: The Click That Ended at uid=0</a></p>
