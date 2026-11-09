@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cache That Remembered a Stranger — shoo0lin</title>
+<meta name="description" content="An Adobe Experience Manager author tier served an authenticated, per-session identity to anonymous visitors for twenty months. The origin was hardened; the dispatcher cache was not.">
+<meta name="author" content="shoo0lin">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The Cache That Remembered a Stranger">
+<meta property="og:description" content="A per-session AEM endpoint answered anonymous requests with someone else's identity. Five hosts, two customers, four dispatchers, two regions — and cache entries up to twenty-one months old.">
+<meta property="og:url" content="https://shoo0lin.github.io/posts/dispatcher-cache.html">
+<meta property="og:image" content="https://shoo0lin.github.io/assets/img/03-admin-vs-anon.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><span class="dot"></span>shoo0lin<span class="slash">/</span>notes</a>
+    <nav class="nav">
+      <a href="../index.html">Posts</a>
+      <a href="#tldr">TL;DR</a>
+      <a href="#fix">The fix</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <header class="article-head">
+      <div class="c-tag">Adobe AEM · Cache misconfiguration · Disclosed</div>
+      <h1>The Cache That Remembered a Stranger</h1>
+      <p class="dek">One endpoint on an Adobe Experience Manager author tier answered a question no anonymous visitor should be able to ask — and answered it with someone else's name. It had been holding that answer for twenty months.</p>
+      <div class="byline">
+        <span>9 Nov 2026</span>
+        <span>16 min read</span>
+        <span>CVSS 3.1 · 5.3 Medium</span>
+        <span>Adobe HackerOne · triaged</span>
+      </div>
+    </header>
+  </div>
+
+  <article class="article">
+    <div class="prose">
+
+      <div class="tldr" id="tldr">
+        <h2>TL;DR</h2>
+        <p><code>/libs/granite/security/currentuser.json</code> is a <em>per-session</em> endpoint: it answers "who is asking?" by returning the identity bound to the caller's session. On Adobe Managed Services author tiers, that URL was cached by the Apache Dispatcher.</p>
+        <p>Result: an anonymous <code>GET</code> returned the identity of whoever last warmed the cache — login identifier, display name, and internal JCR home path. Every other protected path on the same hosts correctly redirected to SAML or answered <code>401</code>.</p>
+        <p>Five hosts, two AMS customers, four distinct dispatcher instances, two AWS regions. The cached entries were between nine and twenty-one months old, and none of them had expired on their own.</p>
+        <p><strong>And the boundary, stated up front:</strong> this is an identity disclosure, not a session theft. There are no cookies, tokens, or content in the response. That distinction is the entire difference between a 5.3 and a 9.8, and I am not going to pretend otherwise.</p>
+      </div>
+
+      <div class="note">
+        <b>What is redacted here</b>
+        Customer names, login identifiers, real names, JCR node IDs, and dispatcher instance suffixes have been replaced. The hosts were still serving the cached responses on 29 October 2026, and publishing a working list of "anonymous identity oracles" would be exactly the harm I am writing about. The unredacted values are in the Adobe HackerOne report and I will share them with anyone who needs them for remediation.
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="t">Contents</div>
+        <ol>
+          <li><a href="#question">A question with an answer it shouldn't have</a></li>
+          <li><a href="#tier">What an author tier is for</a></li>
+          <li><a href="#one-path">One path out of thirteen</a></li>
+          <li><a href="#proof">Proving the cache did it</a></li>
+          <li><a href="#fleet">One host is an accident</a></li>
+          <li><a href="#worth">What an identity is worth</a></li>
+          <li><a href="#score">The honest score</a></li>
+          <li><a href="#root">How the rule gets written</a></li>
+          <li><a href="#fix">The fix</a></li>
+          <li><a href="#receipts">Receipts</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="question"><span class="ch">Prologue</span>A question with an answer it shouldn't have</h2>
+
+      <p class="dropcap">There is a small class of URL that exists only to be asked by someone who is already logged in. AEM has one of the simplest: <code>/libs/granite/security/currentuser.json</code>. It is the server's answer to <em>who am I?</em></p>
+
+      <p>Ask it as a stranger and the correct response is a challenge — a redirect into Okta SAML, or <code>401</code> from the default servlet. Ask it with a session and you get that session's identity back. The endpoint is not supposed to have an opinion about people who have not introduced themselves.</p>
+
+      <p>I was mapping Adobe Managed Services author tiers. Not brute-forcing them — enumerating hostnames from certificate transparency and asking each one a single, polite question. Most of them answered with a login page, which is the correct and deeply boring behaviour I was hoping for.</p>
+
+      <p>One answered with a name.</p>
+
+      <pre><code>$ curl -sv https://author-&lt;customer-a&gt;-65a.adobecqms.net/libs/granite/security/currentuser.json \
+    -H "User-Agent: Mozilla/5.0" -H "Accept: application/json" -H "Cookie: "
+
+&lt; HTTP/1.1 200 OK
+&lt; X-Dispatcher: dispatcher1uswest2-<span class="hl">&lt;redacted&gt;</span>
+&lt; X-Vhost: author
+&lt; Last-Modified: Wed, 16 Oct 2024 15:34:28 GMT
+&lt; Cache-control: no-cache="set-cookie"
+&lt; Content-Type: application/json
+
+{"type":"user","authorizableId":"&lt;redacted-email&gt;",
+ "name":"&lt;redacted&gt;","home":"/home/users/-/&lt;redacted&gt;",
+ "isImpersonated":false}</code><button class="copy">copy</button></pre>
+
+      <p>No cookie was sent. No session existed. The server volunteered a colleague's identity, an internal user-node path, and the fact that the identity was not an impersonation.</p>
+
+      <p>The interesting part was not the leak. It was the timestamp: <code>16 Oct 2024</code>. Whatever session produced that response had ended long before I arrived, and the answer had been sitting in a cache ever since, waiting for the next person to ask.</p>
+
+      <h2 id="tier"><span class="ch">Chapter 1</span>What an author tier is for</h2>
+
+      <p>AEM is two products wearing one name. The <em>publish</em> tier faces the internet and serves pages. The <em>author</em> tier faces editors: it is the CMS back office, the asset pipeline, the workflow engine, and — importantly for this story — a user directory with personally identifying data in it.</p>
+
+      <p>Nobody should reach an author tier without authenticating. In the deployments I was looking at, that means Apache with <code>mod_dispatcher</code> in front of a Jetty/Tomcat origin, and an Okta SAML IdP in front of that. The Dispatcher does three jobs: it caches, it filters, and it is the only component that anonymous traffic is supposed to touch.</p>
+
+      <pre><code> anonymous GET /libs/granite/security/currentuser.json
+        │
+        ▼
+ ┌──────────────┐   cache HIT, no auth check   ┌─────────────────────┐
+ │  Dispatcher  │ ───────────────────────────► │  cached response    │
+ │   (Apache)   │                              │  from a session     │
+ └──────────────┘                              │  that ended in      │
+        │                                      │  2024               │
+        │ cache MISS  (add ?_=1)               └─────────────────────┘
+        ▼
+ ┌──────────────┐   no session
+ │  AEM author  │ ───────────────────────────► 302 → Okta SAML
+ │   (origin)   │                              401 → Basic
+ └──────────────┘</code><button class="copy">copy</button></pre>
+
+      <p>That diagram is the whole vulnerability, and it also contains the diagnosis. The origin is behaving. The cache is not. Somewhere between "this response belongs to one authenticated user" and "this URL is cacheable for everyone", a rule was written that could not be true at the same time.</p>
+
+      <p>For context, AEM's own answer for an anonymous session is <code>{"anonymous":"anonymous"}</code> — I have seen it on other AEM installs. There is no ambiguity about what the endpoint is supposed to return when nobody is asking on their own behalf. The response I got named a real account.</p>
+
+      <h2 id="one-path"><span class="ch">Chapter 2</span>One path out of thirteen</h2>
+
+      <p>Before believing a single endpoint, I checked its neighbours. If an author tier is simply open, everything answers. If one rule is wrong, exactly one thing answers and everything else keeps saying "log in".</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Path</th><th>Anonymous result</th><th>Correct?</th><th>Cached?</th></tr></thead>
+          <tbody>
+            <tr><td><code>/libs/granite/security/currentuser.json</code></td><td><code>200</code> — user JSON, 258 B</td><td><span class="pill red">no</span></td><td>yes</td></tr>
+            <tr><td><code>/libs/granite/security/profile.json</code></td><td><code>200</code> — Okta SAML auto-submit, 1 854 B</td><td><span class="pill teal">yes</span></td><td>no</td></tr>
+            <tr><td><code>/libs/granite/security/userinfo.json</code></td><td><code>401</code> — Basic auth challenge</td><td><span class="pill teal">yes</span></td><td>no</td></tr>
+            <tr><td><code>/libs/cq/security/currentuser.json</code></td><td><code>401</code> — Basic auth challenge</td><td><span class="pill teal">yes</span></td><td>no</td></tr>
+            <tr><td><code>/content/dam/&lt;site&gt;/metadata.json</code></td><td><code>401</code> — Basic auth challenge</td><td><span class="pill teal">yes</span></td><td>no</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Four of five are textbook. The SAML auto-submit page is the "you are not logged in, here is the door" response, and the <code>401</code>s are the default servlet refusing to guess. Only the first one returns data, and it returns data that belongs to somebody.</p>
+
+      <p>This is the control that kills the laziest explanation. If the author tier were exposed by a missing authentication filter, <code>profile.json</code> would be readable too — and it is not. If the whole vhost were public, <code>userinfo.json</code> would answer — and it does not. The behaviour is path-specific, which points at a cache rule, because a cache rule is path-specific by nature.</p>
+
+      <p>I ran the same five probes on the other hosts. Same shape, every time: one <code>200</code>, four challenges.</p>
+
+      <h2 id="proof"><span class="ch">Chapter 3</span>Proving the cache did it</h2>
+
+      <p>"It returned a user object" is an observation. "A cache in front of a hardened origin returned a stale user object" is a claim, and claims need a mechanism test. The one that worked is almost embarrassingly simple: change the cache key.</p>
+
+      <pre><code><span class="cmt"># exact path — served from the dispatcher cache</span>
+$ curl -s -o /dev/null -w '%{http_code}\n' \
+    https://author-&lt;customer-a&gt;-65a.adobecqms.net/libs/granite/security/currentuser.json
+<span class="bad">200</span>
+
+<span class="cmt"># same path + any query string — cache miss, request reaches the origin</span>
+$ curl -s -o /dev/null -w '%{http_code}\n' \
+    'https://author-&lt;customer-a&gt;-65a.adobecqms.net/libs/granite/security/currentuser.json?_=1'
+<span class="ok">401</span>
+
+<span class="cmt"># on the second customer the miss redirects instead of challenging</span>
+$ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
+    'https://author-&lt;customer-b&gt;-65-prod.adobecqms.net/libs/granite/security/currentuser.json?_=1'
+<span class="ok">302</span> → https://&lt;redacted&gt;.okta.com/...</code><button class="copy">copy</button></pre>
+
+      <p>Same URL. Same headers. Same client. One character of query string apart. With the query string, the request misses the cache, reaches AEM, and AEM does exactly what it is supposed to do: refuse. Without it, Apache answers from a file on disk.</p>
+
+      <p>Four more observations close the case:</p>
+
+      <ul>
+        <li><strong><code>X-Dispatcher</code> is on the response.</strong> The body did not come from Tomcat. It came from the caching layer, identified by name and instance.</li>
+        <li><strong><code>Last-Modified</code> is old and stable.</strong> October 2024 on one host, September 2025 on another. Repeated requests over days return byte-identical bodies with the same date.</li>
+        <li><strong>Accept, cookies, and <code>Authorization</code> do not vary the response.</strong> Sending an invalid bearer token, a junk cookie, or <code>Accept: text/html</code> all return the same cached JSON. The cache key is the path. Nothing about the caller is part of it.</li>
+        <li><strong>Path aliases hit the same object.</strong> The clientlibs proxy form — <code>/etc.clientlibs/../libs/granite/security/currentuser.json</code> — returns the identical body, which tells you the key is the <em>normalised</em> path, not the literal request line.</li>
+      </ul>
+
+      <div class="note">
+        <b>The header that looks like a fix and isn't</b>
+        <code>Cache-control: no-cache="set-cookie"</code> is the AEM default for session-ish responses. It means: <em>you may store this response, but do not replay its <code>Set-Cookie</code> header</em>. It protects the cookie. It says nothing about the body — and the body is the identity. Whoever wrote that rule was thinking about the session token and forgot that the JSON <em>is</em> the session's answer.
+      </div>
+
+      <p>One more detail that matters for severity: the cache had no observable expiry. AEM Dispatcher entries normally die on invalidation, not on time. These had survived nine to twenty-one months, through deployments, through user offboarding, through whatever else happened to those accounts. A cache entry that outlives the session that created it is a frozen identity.</p>
+
+      <h2 id="fleet"><span class="ch">Chapter 4</span>One host is an accident</h2>
+
+      <p>A single misconfigured vhost is a customer's problem. Five hosts across two unrelated customers, four dispatcher instances and two AWS regions is a template's problem — and a template is Adobe's.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Host (redacted)</th><th>Env</th><th>Dispatcher</th><th>Cache age</th></tr></thead>
+          <tbody>
+            <tr><td><code>author-&lt;customer-a&gt;-65a</code></td><td>Production</td><td><code>dispatcher1uswest2</code></td><td>~20 months</td></tr>
+            <tr><td><code>author-&lt;customer-b&gt;-65-prod</code></td><td>Production</td><td><code>dispatcher2useast1</code></td><td>~9 months</td></tr>
+            <tr><td><code>author-&lt;customer-b&gt;-65-preprod</code></td><td>Pre-production</td><td><code>dispatcher2useast1</code></td><td>~9 months</td></tr>
+            <tr><td><code>author-&lt;customer-b&gt;-65-dev</code></td><td>Development</td><td><code>dispatcher1useast1</code></td><td>~20 months</td></tr>
+            <tr><td><code>author-&lt;customer-b&gt;-65a-qa</code></td><td>QA</td><td><code>dispatcher1useast1</code></td><td>~21 months</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Two things in that table are worth pausing on.</p>
+
+      <p>First, the environments. Production, pre-production, development, and QA all behave identically. That is the signature of a provisioning template rather than an operator mistake: four environments were built from the same rule set, and so were the two customers, in two regions, on four separate dispatcher instances.</p>
+
+      <p>Second, the identities overlap. The same person appears on both the production and QA hosts of the second customer, with two different JCR paths — because they are two different user nodes, in two different environments, each frozen at a different moment. If you wanted a map of who has author access and where, this misconfiguration hands you the first pin for free.</p>
+
+      <p>I did not go looking for more hosts after that. The question had been answered: it is systemic. Continuing to enumerate would have meant touching more customers' systems to prove something I already knew — and "I already knew it" is not a reason to keep going.</p>
+
+      <h2 id="worth"><span class="ch">Chapter 5</span>What an identity is worth</h2>
+
+      <p>Here is where I have to be careful, because this is the exact point where a Medium gets inflated into a Critical by a researcher who cannot bear to leave a finding where it belongs.</p>
+
+      <p>What the response contains:</p>
+
+      <ul>
+        <li><strong><code>authorizableId</code></strong> — the login identifier. On one customer it is a corporate email address; on the other it is a short username.</li>
+        <li><strong><code>name</code></strong> — a real display name, frequently a person's full name.</li>
+        <li><strong><code>home</code></strong> — the internal JCR path of the user node, e.g. <code>/home/users/-/&lt;opaque-id&gt;</code>.</li>
+        <li><strong><code>isImpersonated</code></strong> — <code>false</code>, in every sample.</li>
+      </ul>
+
+      <p>What it does <em>not</em> contain: no session cookie, no bearer token, no password hash, no group membership, no permissions, no content, and no user list. You get one identity per host — whoever last authenticated through that dispatcher — and no ability to choose a different one.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capability</th><th>Status</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Read a real identity anonymously</td><td><span class="pill red">proven</span></td><td>The whole finding</td></tr>
+            <tr><td>Enumerate other users</td><td><span class="pill teal">no</span></td><td>Cache holds one identity per node</td></tr>
+            <tr><td>Hijack a session</td><td><span class="pill teal">no</span></td><td>No token or cookie in the body</td></tr>
+            <tr><td>Reach content or the DAM</td><td><span class="pill teal">no</span></td><td>Auth gate intact on every other path</td></tr>
+            <tr><td>Escalate to admin</td><td><span class="pill teal">no</span></td><td>No roles or permissions exposed</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>So what is it worth? Three things, in ascending order of usefulness to an attacker.</p>
+
+      <p><strong>A confirmed login identifier.</strong> On AEM, <code>authorizableId</code> is what you type into the login form, and it is frequently the same string you type into the IdP. Knowing it turns "somebody at this company" into "this account exists, and here is its exact name" — which is the input a password spray needs and the thing a good login page will never confirm.</p>
+
+      <p><strong>A business relationship.</strong> The first identity I saw was a shared licensing mailbox at a partner company, not an employee. Anonymous disclosure of that tells you which third party has editorial access to this CMS — useful for a spear-phish aimed at the partner rather than the customer, whose defensive posture you know nothing about.</p>
+
+      <p><strong>An internal node path.</strong> <code>/home/users/-/&lt;id&gt;</code> is not a secret on its own, but it is the shape of the user tree, confirmed from outside. Small pieces of internal structure are what turn a generic exploit into a targeted one.</p>
+
+      <p>None of that is account takeover. All of it is reconnaissance that the organisation did not intend to publish — for twenty months, to anyone, with no authentication and no rate limit worth mentioning.</p>
+
+      <h2 id="score"><span class="ch">Chapter 6</span>The honest score</h2>
+
+      <p>The vector I would defend in review:</p>
+
+      <pre><code>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N  <span class="hl">= 5.3 Medium</span></code><button class="copy">copy</button></pre>
+
+      <ul>
+        <li><strong>AV:N / AC:L / PR:N / UI:N</strong> — one unauthenticated GET, no timing, no interaction, no prerequisites. The low complexity is real; that is what makes the misconfiguration embarrassing rather than clever.</li>
+        <li><strong>C:L</strong> — one identity per host. Confidentiality of a name, a login identifier, and an internal path. Not credentials, not content.</li>
+        <li><strong>S:U</strong> — the attacker does not gain the victim's authority. They learn who the victim is.</li>
+      </ul>
+
+      <p>I have seen this class reported as Critical, and I understand the temptation: the word "authenticated data served to anonymous users" sounds like a breach. It is not. The severity lives entirely in what the cached object <em>is</em>, and this one is a name tag.</p>
+
+      <div class="warn">
+        <b>Where the line actually sits</b>
+        If that same cache rule had caught a response containing a session token, a password-reset link, or a full <code>profile.json</code> payload with contact details, the identical misconfiguration would be account takeover and the score would be an 8 or a 9. The bug is the rule. The severity is the payload. Anyone reporting this class should measure the payload honestly rather than the rule's potential.
+      </div>
+
+      <h2 id="root"><span class="ch">Chapter 7</span>How the rule gets written</h2>
+
+      <p>I never read these customers' <code>dispatcher.any</code> — that file is not reachable anonymously, and guessing at a config you cannot see is how write-ups lose credibility. What follows is a reconstruction that is consistent with every observed behaviour, and I am labelling it as such.</p>
+
+      <p>A Dispatcher config has a filter section (what may be requested at all) and a cache section (what may be stored). Author tiers usually deny everything and allow a small, boring set of paths. Somewhere in the cache rules, the user-contextual endpoint ended up on an allow list:</p>
+
+      <pre><code>/cache {
+  /rules {
+    /0000 { /glob "*"           /type "deny"  }
+    <span class="hl">/0062 { /glob "/libs/granite/security/currentuser.json"  /type "allow" }</span>
+  }
+}</code><button class="copy">copy</button></pre>
+
+      <p>On its own, "allow" only says the response is storable. The second half of the bug is that nothing keyed the entry to a session. Dispatcher has a mechanism for exactly this — <code>/sessionmanagement</code>, which folds a session identifier into the cache key so each user gets their own entry — and it is not in play here. Without it, the first authenticated response through a dispatcher node becomes <em>the</em> response for that URL, for everyone, until something invalidates it.</p>
+
+      <p>Why does that rule exist at all? My best guess, and it is only a guess: <code>currentuser.json</code> is called constantly by the author UI to decide what to render. It is a hot path. Somebody, at some point, treated "hot path" as "cache it" without noticing that the endpoint's entire purpose is to vary per caller. That is not carelessness unique to AEM — it is the generic failure mode of caching: the cache key has to include every input the response depends on, and here the input is <em>who is asking</em>.</p>
+
+      <p>The reason it survives for months is the same reason it is dangerous. Nothing in the system is watching for "this cached object should never have existed". The origin never sees the request, so it never logs an anomaly. The cache serves a valid file with a valid timestamp. Dashboards stay green. The only component that could notice is a person asking the right question.</p>
+
+      <h2 id="fix"><span class="ch">Chapter 8</span>The fix</h2>
+
+      <p>Four steps, in the order I would do them.</p>
+
+      <p><strong>1. Flush, then deny.</strong> Delete the cached entry, then make the rule impossible to reintroduce. A <code>deny</code> for <code>/libs/granite/security/*</code> in <code>/cache/rules</code> is the direct fix; these are per-session endpoints and none of them belong in a shared cache.</p>
+
+      <pre><code>/cache {
+  /rules {
+    /0000 { /glob "*"                    /type "deny" }
+    /0001 { /glob "/libs/granite/security/*"  /type "deny" }
+    <span class="cmt"># … only genuinely public, non-personal paths below</span>
+  }
+}</code><button class="copy">copy</button></pre>
+
+      <p><strong>2. If you must cache a session-aware path, key it by session.</strong> <code>/sessionmanagement</code> with the login token header is the documented mechanism. For an author tier the better answer is usually "don't cache it at all" — author traffic is low-volume and internal, and the cache buys little.</p>
+
+      <p><strong>3. Audit the rest of the allow list with one question.</strong> For every path that may be cached: does the response change based on who is asking, or on any header other than the ones in the cache key? <code>currentuser.json</code> was the one that failed here, but it is rarely the only user-contextual endpoint in a CMS.</p>
+
+      <p><strong>4. Fix it at the template.</strong> Two customers, four environments, four dispatchers and two regions all share this behaviour, which means the correction belongs in the AMS default rule set, not in five separate customer tickets. A per-customer fix leaves the next provisioned environment with the same default.</p>
+
+      <p>And a monitoring note for whoever owns these tiers: the useful detection is not "did someone request <code>currentuser.json</code>" — everyone does. It is "did a response for a per-session path get served without a session". That is a log line the dispatcher can emit, and almost nobody asks it for.</p>
+
+      <h2 id="receipts"><span class="ch">Epilogue</span>Receipts</h2>
+
+      <p>The artefacts are unglamorous by design. There is no exploit script, because there is no exploit — there is a URL and a <code>curl</code>.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Artefact</th><th>What it establishes</th></tr></thead>
+          <tbody>
+            <tr><td>Five <code>200</code> responses</td><td>Anonymous identity disclosure, one per host, byte-stable across days</td></tr>
+            <tr><td>Cache-miss pair per host</td><td><code>?_=1</code> → <code>401</code>/<code>302</code>; the origin refuses when it is actually consulted</td></tr>
+            <tr><td>Neighbour matrix</td><td>Four other protected paths correctly challenged on every host</td></tr>
+            <tr><td>Header set</td><td><code>X-Dispatcher</code>, <code>X-Vhost: author</code>, <code>Last-Modified</code> from 2024–2025</td></tr>
+            <tr><td>Fleet table</td><td>2 customers, 4 dispatchers, 2 regions, 4 environments, 9–21 months stale</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>On method, because it matters when the targets are somebody else's production systems: the entire run was a single unauthenticated <code>GET</code> per host and per path, with no concurrency, no fuzzing, no authentication attempts, and no attempt to flush or poison anything. I did not try a password against any account I found. Finding a login identifier and then spraying it is how a Medium becomes an incident, and it is not necessary to prove the finding.</p>
+
+      <p>Timeline, so far: found in June 2026 while mapping AMS author tiers; reported to Adobe with the unredacted host list and responses; triaged with Hall of Fame credit. Still live when I last checked, on 29 October 2026 — same five paths, same five bodies, same <code>Last-Modified</code> dates. This page publishes the mechanism with identities and hostnames redacted, because "still serving the data" was true at publication time. If Adobe or the affected customers confirm remediation, I will publish the full values and update this note.</p>
+
+      <p>Two lessons, and then I will stop. First: <strong>an origin and its cache are two different security boundaries</strong>, and hardening one says nothing about the other. The AEM instances here were fine. The thing in front of them had been holding a stranger's name for twenty months. Second: <strong>the cache key is a security control</strong>. Every field a response depends on has to be in it, and "who is asking" is the easiest field in the world to forget.</p>
+
+      <p>The endpoint asked who I was. It answered with someone else.</p>
+
+      <hr>
+
+      <p style="color:var(--faint);font-size:14px">Disclosure status: reported to Adobe (HackerOne, triaged). Identities, hostnames, and internal paths are redacted here and in the public copy of this page; the unredacted evidence is with the vendor. No customer data beyond the identity fields described was accessed, and no authentication was attempted. This page will be updated when remediation is confirmed.</p>
+
+      <hr>
+      <p class="next"><a href="click-to-root.html">← Read the lab series: The Click That Ended at uid=0</a></p>
+
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 shoo0lin · notes from the seam between server and browser</span>
+    <span><a href="../index.html">← All posts</a></span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('pre').forEach(function (pre) {
+  var btn = pre.querySelector('.copy');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var code = pre.querySelector('code');
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      btn.textContent = 'copied';
+      setTimeout(function () { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+});
+</script>
+</body>
+</html>
