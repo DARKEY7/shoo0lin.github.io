@@ -13,9 +13,11 @@
 <meta property="og:image" content="https://shoo0lin.github.io/assets/img/03-admin-vs-anon.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="../assets/css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23111111'/><rect x='30' y='30' width='40' height='40' fill='%23e00000'/></svg>">
 </head>
 <body>
+
+<div class="rails" aria-hidden="true"></div>
 
 <header class="topbar">
   <div class="wrap">
@@ -31,8 +33,9 @@
 </header>
 
 <main>
-  <div class="wrap">
-    <header class="article-head">
+  <section class="post-hero">
+    <img class="post-hero-img" src="../assets/img/01-source-confirmed.png" alt="Lab capture: the stored payload confirmed in the served page.">
+    <div class="wrap post-hero-inner">
       <div class="c-tag">WordPress · Stored XSS · Lab-verified</div>
       <h1>The Accordion That Opened a Door</h1>
       <p class="dek">Two halves of the same WordPress feature disagreed about what a link may contain. One half checked. The other half trusted. An Author — no special powers, no <code>unfiltered_html</code>, no administrator approval — walked through the gap and ended up holding an administrator's session.</p>
@@ -42,8 +45,8 @@
         <span>~14 min read</span>
         <span>CVSS 3.1 ≈ 8.8 (High)</span>
       </div>
-    </header>
-  </div>
+    </div>
+  </section>
 
   <article class="article">
     <div class="prose">

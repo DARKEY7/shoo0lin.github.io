@@ -11,9 +11,11 @@
 <meta property="og:image" content="https://shoo0lin.github.io/assets/img/03-admin-vs-anon.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="assets/css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23111111'/><rect x='30' y='30' width='40' height='40' fill='%23e00000'/></svg>">
 </head>
 <body>
+
+<div class="rails" aria-hidden="true"></div>
 
 <header class="topbar">
   <div class="wrap">
@@ -27,70 +29,101 @@
   </div>
 </header>
 
-<section class="hero wrap">
-  <span class="kicker">security research · field notes</span>
-  <h1>Notes from the seam<br>between <em>server</em> and browser.</h1>
-  <p class="lede">I hunt the places where two components disagree about the same value — where the filter says no, the framework says yes, and the page looks clean right up until the click.</p>
-  <div class="hero-meta">
-    <span>Bugs found in labs &amp; disclosed responsibly</span>
-    <span>No inflated severities</span>
-    <span>Receipts attached</span>
-  </div>
-</section>
+<main>
 
-<main class="wrap" id="posts">
-  <div class="post-grid">
-
-    <a class="card" href="posts/interactivity-accordion.html">
-      <div class="card-thumb"><img src="assets/img/01-source-confirmed.png" alt="Terminal capture: the stored payload confirmed in the served page." loading="lazy"></div>
-      <div class="c-tag">WordPress · Stored XSS · Lab-verified · Part I</div>
-      <h2>The Accordion That Opened a Door</h2>
-      <p>WordPress's server-side HTML writer enforces URL policy; the client-side Interactivity API enforces none. An Author smuggles <code>javascript:</code> through a <code>data-wp-context</code> blob, the served page stays clean, and one administrator click turns a guest-writer account into administrator authority.</p>
-      <div class="c-meta">
-        <span>9 Nov 2026</span>
-        <span>14 min read</span>
-        <span>CVSS ≈ 8.8 High</span>
-      </div>
-    </a>
-
-    <a class="card" href="posts/click-to-root.html">
-      <div class="card-thumb"><img src="assets/img/rce/03-rce-exfil.png" alt="Capture: the webshell response and outbound callback proving command execution." loading="lazy"></div>
-      <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified · Part II</div>
-      <h2>The Click That Ended at uid=0</h2>
-      <p>The same six lines of markup, followed further. An Administrator's plugin editor is a keyboard with admin hands on it: the XSS harvests the editor nonce, writes a PHP webshell over <code>hello.php</code>, and the next request returns root — proven by a changed file hash and an outbound callback.</p>
-      <div class="c-meta">
-        <span>9 Nov 2026</span>
-        <span>12 min read</span>
-        <span>Full site takeover</span>
-      </div>
-    </a>
-
-    <a class="card" href="posts/dispatcher-cache.html">
-      <div class="card-thumb"><img src="assets/img/aem/01-cache-hit.png" alt="Lab terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache." loading="lazy"><span class="play">&#9654; 34s clip</span></div>
-      <div class="c-tag">Adobe AEM · Dispatcher cache · Field finding</div>
-      <h2>The Cache That Remembered a Stranger</h2>
-      <p>A per-session endpoint on AEM author tiers answered anonymous requests with someone else's identity — login identifier, display name, internal user path. Five hosts, two customers, four dispatchers. The cached answers were nine to twenty-one months old.</p>
-      <div class="c-meta">
-        <span>9 Nov 2026</span>
-        <span>16 min read</span>
-        <span>CVSS 5.3 Medium</span>
-      </div>
-    </a>
-
-  </div>
-
-  <section id="about" style="padding-bottom:80px">
-    <h2 style="font-family:var(--serif);font-size:28px;margin:0 0 12px">About these notes</h2>
-    <p style="color:var(--muted);max-width:680px;margin:0 0 14px">Each post is a hunt written the way it happened: the wrong first hypothesis, the control that killed it, the evidence that survived. Everything is reproduced in an isolated lab unless stated otherwise, and every severity claim is separated from the impact proof on purpose.</p>
-    <p style="color:var(--muted);max-width:680px;margin:0 0 14px">The WordPress write-ups ship with runnable code: <a href="https://github.com/shoo0lin/wp-interactivity-xss">shoo0lin/wp-interactivity-xss</a> contains the disposable Docker lab, the PoC scripts, the captured evidence, and the patched directive. The AEM piece has its own: <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">shoo0lin/aem-dispatcher-cache-leak</a> is a mock origin and dispatcher in both configurations, plus the redacting field probe.</p>
-    <p style="color:var(--muted);max-width:680px;margin:0">Corrections and replications are welcome — open an issue on <a href="https://github.com/shoo0lin" rel="me">GitHub</a>.</p>
+  <section class="hero wrap">
+    <span class="kicker">Security research · field notes</span>
+    <h1>Notes from the seam between <em>server</em> and browser.</h1>
+    <p class="lede">I hunt the places where two components disagree about the same value — where the filter says no, the framework says yes, and the page looks clean right up until the click.</p>
+    <div class="hero-meta">
+      <span>Bugs found in labs &amp; disclosed responsibly</span>
+      <span>No inflated severities</span>
+      <span>Receipts attached</span>
+    </div>
   </section>
+
+  <section class="feature-band">
+    <div class="wrap">
+      <div class="section-label">Featured insight</div>
+      <a class="feature" href="posts/dispatcher-cache.html">
+        <div class="feature-media">
+          <img src="assets/img/aem/01-cache-hit.png" alt="Lab terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache.">
+          <span class="play">&#9654; 34s clip</span>
+        </div>
+        <div class="feature-body">
+          <div class="c-tag">Adobe AEM · Dispatcher cache · Field finding</div>
+          <h2>The Cache That Remembered a Stranger</h2>
+          <p>A per-session endpoint on AEM author tiers answered anonymous requests with someone else's identity — login identifier, display name, internal user path. Five hosts, two customers, four dispatchers. The cached answers were nine to twenty-one months old.</p>
+          <div class="c-meta">
+            <span>9 Nov 2026</span>
+            <span>16 min read</span>
+            <span>CVSS 5.3 Medium</span>
+          </div>
+          <span class="read">Read the write-up &rarr;</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section class="posts-section wrap" id="posts">
+    <div class="section-head">
+      <h2>Posts</h2>
+      <span class="mono">Lab series · two parts</span>
+    </div>
+
+    <div class="post-grid">
+
+      <a class="card" href="posts/interactivity-accordion.html">
+        <div class="card-thumb">
+          <img src="assets/img/01-source-confirmed.png" alt="Terminal capture: the stored payload confirmed in the served page.">
+        </div>
+        <div class="card-body">
+          <div class="c-tag">WordPress · Stored XSS · Lab-verified · Part I</div>
+          <h2>The Accordion That Opened a Door</h2>
+          <p>WordPress's server-side HTML writer enforces URL policy; the client-side Interactivity API enforces none. An Author smuggles <code>javascript:</code> through a <code>data-wp-context</code> blob, the served page stays clean, and one administrator click turns a guest-writer account into administrator authority.</p>
+          <div class="c-meta">
+            <span>9 Nov 2026</span>
+            <span>14 min read</span>
+            <span>CVSS ≈ 8.8 High</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="card" href="posts/click-to-root.html">
+        <div class="card-thumb">
+          <img src="assets/img/rce/03-rce-exfil.png" alt="Capture: the webshell response and outbound callback proving command execution.">
+        </div>
+        <div class="card-body">
+          <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified · Part II</div>
+          <h2>The Click That Ended at uid=0</h2>
+          <p>The same six lines of markup, followed further. An Administrator's plugin editor is a keyboard with admin hands on it: the XSS harvests the editor nonce, writes a PHP webshell over <code>hello.php</code>, and the next request returns root — proven by a changed file hash and an outbound callback.</p>
+          <div class="c-meta">
+            <span>9 Nov 2026</span>
+            <span>12 min read</span>
+            <span>Full site takeover</span>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <section class="about-band" id="about">
+    <div class="wrap">
+      <div class="section-label">About these notes</div>
+      <h2>Every hunt, including the wrong turns</h2>
+      <p>Each post is a hunt written the way it happened: the wrong first hypothesis, the control that killed it, the evidence that survived. Everything is reproduced in an isolated lab unless stated otherwise, and every severity claim is separated from the impact proof on purpose.</p>
+      <p>The WordPress write-ups ship with runnable code: <a href="https://github.com/shoo0lin/wp-interactivity-xss">shoo0lin/wp-interactivity-xss</a> contains the disposable Docker lab, the PoC scripts, the captured evidence, and the patched directive. The AEM piece has its own: <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">shoo0lin/aem-dispatcher-cache-leak</a> is a mock origin and dispatcher in both configurations, plus the redacting field probe.</p>
+      <p>Corrections and replications are welcome — open an issue on <a href="https://github.com/shoo0lin" rel="me">GitHub</a>.</p>
+    </div>
+  </section>
+
 </main>
 
 <footer>
   <div class="wrap">
-    <span>© 2026 shoo0lin</span>
-    <span>Built by hand. No trackers, no fonts, no analytics.</span>
+    <span>© 2026 shoo0lin · notes from the seam between server and browser</span>
+    <span><a href="https://github.com/shoo0lin" rel="me">GitHub</a></span>
   </div>
 </footer>
 

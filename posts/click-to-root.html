@@ -13,13 +13,15 @@
 <meta property="og:image" content="https://shoo0lin.github.io/assets/img/rce/02-admin-editor.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="../assets/css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0d12'/><circle cx='50' cy='50' r='18' fill='%23f0b429'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23111111'/><rect x='30' y='30' width='40' height='40' fill='%23e00000'/></svg>">
 <style>
-  video { display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--line); box-shadow:var(--shadow); background:#000; }
-  .part2 { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bg); background:var(--amber); border-radius:999px; padding:3px 10px; margin-bottom:14px; }
+  video { display:block; width:100%; height:auto; border-radius:2px; border:1px solid var(--line); background:#000; }
+  .part2 { display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:#fff; background:var(--accent); padding:4px 10px; margin-bottom:14px; }
 </style>
 </head>
 <body>
+
+<div class="rails" aria-hidden="true"></div>
 
 <header class="topbar">
   <div class="wrap">
@@ -35,11 +37,11 @@
 </header>
 
 <main>
-  <div class="wrap">
-    <header class="article-head">
-      <span class="part2">Part II · the escalation</span>
-      <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified</div>
-      <h1>The Click That Ended at <code style="font-size:.8em">uid=0</code></h1>
+  <section class="post-hero">
+    <img class="post-hero-img" src="../assets/img/rce/03-rce-exfil.png" alt="Lab capture: the webshell response and outbound callback proving command execution.">
+    <div class="wrap post-hero-inner">
+      <div class="c-tag">Part II · WordPress · Stored XSS → RCE · Lab-verified</div>
+      <h1>The Click That Ended at <code>uid=0</code></h1>
       <p class="dek">The first post proved the click. This one follows the authority all the way down: an Author's link, an Administrator's plugin editor, and a shell prompt that answers as root.</p>
       <div class="byline">
         <span>shoo0lin</span>
@@ -47,8 +49,8 @@
         <span>~12 min read</span>
         <span>Site takeover · lab-verified</span>
       </div>
-    </header>
-  </div>
+    </div>
+  </section>
 
   <article class="article">
     <div class="prose">
