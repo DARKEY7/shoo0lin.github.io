@@ -2,11 +2,10 @@
 
 > Field notes from the seam between server and browser.
 
-[![Live site](https://img.shields.io/badge/live-shoo0lin.github.io-f0b429?style=flat-square)](https://shoo0lin.github.io)
-![Finding](https://img.shields.io/badge/finding-lab--verified-e5534b?style=flat-square)
-![Severity](https://img.shields.io/badge/CVSS%203.1-8.8%20High-f0b429?style=flat-square)
-![Platform](https://img.shields.io/badge/WordPress-7.x-57c2b4?style=flat-square)
-![Disclosure](https://img.shields.io/badge/upstream-pending-9aa3b2?style=flat-square)
+[![Live site](https://img.shields.io/badge/live-shoo0lin.github.io-e00000?style=flat-square)](https://shoo0lin.github.io)
+![Finding](https://img.shields.io/badge/finding-lab--verified-111111?style=flat-square)
+![Severity](https://img.shields.io/badge/CVSS%203.1-8.8%20High-e00000?style=flat-square)
+![Platform](https://img.shields.io/badge/WordPress-7.x-444444?style=flat-square)
 
 A static site built by hand — no framework, no trackers, no external fonts — and the
 long-form write-ups behind it. The lab series is a stored XSS in WordPress's
@@ -289,14 +288,13 @@ el.setAttribute( attribute, result );
 
 ---
 
-## Scope & disclosure status
+## Scope
 
 - **Lab only.** No production WordPress system was contacted.
 - The WordPress HackerOne program's scope document returned **HTTP 404** at the time of
   testing, so active testing stopped before it began.
 - No RCE claimed. No plugin installation performed. The write primitive shown is
   create → read → force-delete.
-- Upstream status: pending. This section will be updated when that changes.
 
 ---
 
@@ -327,10 +325,14 @@ python3 -m http.server 8000
 
 ## Adding a post
 
-1. Copy `posts/interactivity-accordion.html` as a starting point.
-2. Add a `<a class="card">` entry to `index.html`.
-3. Keep the byline, the scope note, and the separation between proven impact and
-   inferred impact intact.
+1. Copy `posts/dispatcher-cache.html` as a starting point — it has the cover-hero
+   header, figure/caption blocks, and the callout styles.
+2. Add a `<a class="card">` entry to the post grid in `index.html`: a `.card-thumb`
+   with the cover image, then a `.card-body` holding `.c-tag`, `<h2>`, summary and
+   `.c-meta`.
+3. Add the title to the nav in every page's topbar if it belongs there.
+4. Keep the byline, the media labels (lab vs field), and the separation between
+   proven impact and inferred impact intact.
 
 ## Content policy
 
