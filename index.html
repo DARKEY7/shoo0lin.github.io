@@ -47,19 +47,19 @@
   <section class="feature-band">
     <div class="wrap">
       <div class="section-label">Featured insight</div>
-      <a class="feature" href="posts/dispatcher-cache.html">
+      <a class="feature" href="posts/profile-lock-pin.html">
         <div class="feature-media">
-          <img src="assets/img/aem/01-cache-hit.png" alt="Terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache.">
-          <span class="play">&#9654; 34s clip</span>
+          <img src="assets/img/netflix/demo-unlock-poster.jpg" alt="Capture: the profile gate asking for four digits, with the profile-name row masked.">
+          <span class="play">&#9654; 14s clip</span>
         </div>
         <div class="feature-body">
-          <div class="c-tag">Adobe AEM · Dispatcher cache · Field finding</div>
-          <h2>The Cache That Remembered a Stranger</h2>
-          <p>A per-session endpoint on AEM author tiers answered anonymous requests with someone else's identity — login identifier, display name, internal user path. Five hosts, two customers, four dispatchers. The cached answers were nine to twenty-one months old.</p>
+          <div class="c-tag">Netflix · GraphQL · Broken access control</div>
+          <h2>The Lock That Read Out Its Own Combination</h2>
+          <p>Profile Lock is a parental control: four digits stop the kids profile from opening a parent's. The gate enforces the PIN exactly as advertised. The query underneath it returns that same PIN, in cleartext, for every profile on the account — to whichever profile asks. One request, no brute force, unlocked.</p>
           <div class="c-meta">
-            <span>9 Nov 2026</span>
-            <span>16 min read</span>
-            <span>CVSS 5.3 Medium</span>
+            <span>11 Nov 2026</span>
+            <span>13 min read</span>
+            <span>CVSS 7.1 High</span>
           </div>
           <span class="read">Read the write-up &rarr;</span>
         </div>
@@ -75,18 +75,18 @@
 
     <div class="post-grid">
 
-      <a class="card" href="posts/profile-lock-pin.html">
+      <a class="card" href="posts/dispatcher-cache.html">
         <div class="card-thumb">
-          <img src="assets/img/netflix/00-cover-pin.png" alt="Reconstruction: one profile's lockPin returned as 0978 in cleartext, four others null.">
+          <img src="assets/img/aem/01-cache-hit.png" alt="Terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache.">
         </div>
         <div class="card-body">
-          <div class="c-tag">Netflix · GraphQL · Broken access control</div>
-          <h2>The Lock That Read Out Its Own Combination</h2>
-          <p>Profile Lock exists to keep the kids profile out of a parent's profile. The gate enforces the PIN; the read path returns that same PIN, in cleartext, to any profile on the account. One query, four digits, unlocked.</p>
+          <div class="c-tag">Adobe AEM · Dispatcher cache · Field finding</div>
+          <h2>The Cache That Remembered a Stranger</h2>
+          <p>A per-session endpoint on AEM author tiers answered anonymous requests with someone else's identity — login identifier, display name, internal user path. Five hosts, two customers, four dispatchers. The cached answers were nine to twenty-one months old.</p>
           <div class="c-meta">
-            <span>11 Nov 2026</span>
-            <span>13 min read</span>
-            <span>CVSS 7.1 High</span>
+            <span>9 Nov 2026</span>
+            <span>16 min read</span>
+            <span>CVSS 5.3 Medium</span>
           </div>
         </div>
       </a>
