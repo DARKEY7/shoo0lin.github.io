@@ -3,34 +3,69 @@
 > Field notes from the seam between server and browser.
 
 [![Live site](https://img.shields.io/badge/live-shoo0lin.github.io-e00000?style=flat-square)](https://shoo0lin.github.io)
-![Finding](https://img.shields.io/badge/finding-lab--verified-111111?style=flat-square)
+![Finding](https://img.shields.io/badge/finding-reproduced-111111?style=flat-square)
+![Field](https://img.shields.io/badge/finding-field--verified-111111?style=flat-square)
 ![Severity](https://img.shields.io/badge/CVSS%203.1-8.8%20High-e00000?style=flat-square)
 ![Platform](https://img.shields.io/badge/WordPress-7.x-444444?style=flat-square)
 
 A static site built by hand — no framework, no trackers, no external fonts — and the
-long-form write-ups behind it. The lab series is a stored XSS in WordPress's
+long-form write-ups behind it. The first two posts are a stored XSS in WordPress's
 Interactivity API that escalates an Author to Administrator authority with a single
-click; the disclosed finding is a Dispatcher cache leak of per-session identity on
-AEM author tiers.
+click; the two field findings are a Dispatcher cache leak of per-session identity on
+AEM author tiers, and Netflix's Profile Lock handing the plaintext PIN of every
+profile to any profile's session.
 
 ## Posts
 
 | # | Title | What it covers |
 |---|---|---|
+| — | [The Lock That Read Out Its Own Combination](https://shoo0lin.github.io/posts/profile-lock-pin.html) | `ProfileLockTemplate` returns every profile's `lockPin` in cleartext to any session on the account, kids profile included; the gate enforces the PIN, the read path discloses it. Four controls. CVSS 7.1. |
 | I | [The Accordion That Opened a Door](https://shoo0lin.github.io/posts/interactivity-accordion.html) | The client/server URL-policy mismatch; stored XSS; 62-capability read and an admin write after one click. CVSS ≈ 8.8. |
 | II | [The Click That Ended at uid=0](https://shoo0lin.github.io/posts/click-to-root.html) | The same primitive pushed through the admin plugin editor: nonce harvest → `hello.php` overwrite → command execution, confirmed by hash and by an outbound callback. |
 | — | [The Cache That Remembered a Stranger](https://shoo0lin.github.io/posts/dispatcher-cache.html) | AEM author tiers caching `/libs/granite/security/currentuser.json`: five hosts, two AMS customers, identities up to 21 months stale. Identity disclosure only; CVSS 5.3. Identities and hostnames redacted. |
+
+## The Profile Lock finding, in short
+
+The picker's persisted query selects `lockPin` for **every** entry in
+`growthAccount.profiles`, and the resolver returns the stored PIN in cleartext to
+whichever profile holds the session:
+
+```
+fragment ProfileLockTemplateAccount on Account {
+  profiles { guid name gender isAccountOwner isProfileCreationLocked lockPin }
+}
+```
+
+| Gate | Result |
+|---|---|
+| **Read path** | kids-profile session → every profile's `lockPin`, one populated in cleartext |
+| **Gate** | entering the disclosed PIN moves `pg` from the kids GUID to the protected GUID; `/browse` renders as that profile |
+| **Control — no cookie** | `UNAUTHENTICATED` (`consumeridentitydgs`), `growthAccount: null` |
+| **Control — no PIN / wrong PIN** | session stays on the kids profile; the lock is genuinely enforced |
+| **Control — write path** | `growthSetProfilePin` / `growthRemoveProfilePin` → `PERMISSION_DENIED`, origin `passport` |
+| **Boundary** | requires a session on the same account — which is precisely the threat model the feature exists for |
+
+No reproducer was published with the first version of this piece, on the grounds that the
+reproduction is a working unlock. The harnesses are now public, because the thing they
+need is a session on the account being tested — which is the boundary the finding lives
+inside. **[shoo0lin/netflix-profile-lock-pin](https://github.com/shoo0lin/netflix-profile-lock-pin)**
+holds the read, the three gate controls, the trimmed response, the control transcript and
+the 14-second clip.
 
 ## Runnable PoC
 
 The harnesses behind the posts live in separate repositories:
 
 - **[shoo0lin/wp-interactivity-xss](https://github.com/shoo0lin/wp-interactivity-xss)** — disposable
-  WordPress 7.1.2 Docker lab, minimal validator, two escalation chains, C2 listener, captured
-  evidence, and the patched `bind.ts`. Lab only.
+  WordPress 7.1.2 Docker setup, minimal validator, two escalation chains, C2 listener, captured
+  evidence, and the patched `bind.ts`. Reproduction only.
 - **[shoo0lin/aem-dispatcher-cache-leak](https://github.com/shoo0lin/aem-dispatcher-cache-leak)** —
   mock AEM origin and mock Apache Dispatcher in both vulnerable and patched configurations,
   a self-checking reproduction, and the redacting field probe. No customer data; no host list.
+- **[shoo0lin/netflix-profile-lock-pin](https://github.com/shoo0lin/netflix-profile-lock-pin)** —
+  the persisted-query read, the gate walk, the no-PIN / wrong-PIN / right-PIN controls, the
+  redacted response and transcript, and the clip with the edit script that produced it. Needs
+  a cookie file for an account you control; no cross-account path exists to ship.
 
 ---
 
@@ -77,7 +112,7 @@ The server says *no*. The browser says *yes*. A `curl` only ever asks the server
 | **Impact** | Admin identity + all 62 capabilities read; post created (`201`), read back, force-deleted (`200`) |
 | **Control** | Same payload, anonymous session → `401 rest_not_logged_in`, no write |
 | **Causality** | Remove directive ⇒ inert; neuter payload ⇒ inert; directive + `javascript:` ⇒ executes |
-| **Environment** | Isolated local Docker lab (`127.0.0.1:18080`); **no production testing**, scope doc returned 404 |
+| **Environment** | Isolated local Docker instance (`127.0.0.1:18080`); **no production testing**, scope doc returned 404 |
 
 Severity is computed from proven facts, not vibes: `AV:N/AC:L/PR:L/UI:R/S:C/C:H/I:H/A:H` ≈ **8.8 High**.
 The click requirement is the honest ceiling — without `UI:R` this would sit in the 9.x band.
@@ -187,7 +222,7 @@ One click by an Administrator. That's the only interaction required.
 
 ## What the click bought
 
-Against a real lab administrator (`bindadmin`, id 7), the payload scraped the
+Against a real bench administrator (`bindadmin`, id 7), the payload scraped the
 `createNonceMiddleware` nonce from `/wp-admin/` and used the victim's own session:
 
 **Read** — `/wp/v2/users/me?context=edit` (2 434 bytes):
@@ -244,7 +279,7 @@ executable. The tempting zero-click route (`data-wp-html`) is gated behind a pri
 
 ---
 
-## Reproduction (lab)
+## Reproduction
 
 1. WordPress 7.x with an Author account (no `unfiltered_html`).
 2. Publish the payload above via `POST /?rest_route=/wp/v2/posts`.
@@ -253,7 +288,7 @@ executable. The tempting zero-click route (`data-wp-html`) is gated behind a pri
 5. Click as Administrator; the script reads and writes with the admin session.
 6. Repeat step 5 anonymously — `401`, no write.
 
-Affected revisions: server `wordpress-develop@49b718f16e` (present in lab 7.1.2);
+Affected revisions: server `wordpress-develop@49b718f16e` (present in the 7.1.2 image);
 client Gutenberg `5715a61334c4d29f21b67cf34b46061dc1b62502` — the SHA 7.1.2 ships.
 Bundled module: `/wp-includes/js/dist/script-modules/interactivity/index.min.js?ver=efaa5193bbad9c60ffd1`.
 
@@ -290,7 +325,7 @@ el.setAttribute( attribute, result );
 
 ## Scope
 
-- **Lab only.** No production WordPress system was contacted.
+- **Reproduction only.** No production WordPress system was contacted.
 - The WordPress HackerOne program's scope document returned **HTTP 404** at the time of
   testing, so active testing stopped before it began.
 - No RCE claimed. No plugin installation performed. The write primitive shown is
@@ -304,13 +339,16 @@ el.setAttribute( attribute, result );
 .
 ├── index.html                              # home / post index
 ├── posts/
+│   ├── profile-lock-pin.html               # Netflix Profile Lock PIN disclosure
 │   ├── interactivity-accordion.html        # part I — the primitive
 │   ├── click-to-root.html                  # part II — escalation to RCE
 │   └── dispatcher-cache.html               # AEM Dispatcher cache leak (redacted)
 ├── assets/
 │   ├── css/style.css                       # one hand-written stylesheet
-│   └── img/                                # lab screenshots (redacted)
-│       ├── aem/                            # dispatcher lab stills + 34s demo clip
+│   └── img/
+│       ├── anim/                           # one animated reconstruction per post
+│       ├── netflix/                        # field stills, 14s edited clip, cover, generators
+│       ├── aem/                            # dispatcher stills + 34s demo clip
 │       └── rce/                            # part II captures + 42s demo clip
 ├── .nojekyll                               # serve files as-is
 └── README.md
@@ -331,14 +369,21 @@ python3 -m http.server 8000
    with the cover image, then a `.card-body` holding `.c-tag`, `<h2>`, summary and
    `.c-meta`.
 3. Add the title to the nav in every page's topbar if it belongs there.
-4. Keep the byline, the media labels (lab vs field), and the separation between
+4. Keep the byline, the media labels (repro vs field), and the separation between
    proven impact and inferred impact intact.
 
 ## Content policy
 
-- Only lab-verified or genuinely disclosed findings are published.
+- Only reproduced or genuinely disclosed findings are published.
 - Severity is computed from proven facts, never inflated.
 - Screenshots are redacted for credentials and PII before commit.
+- Field findings ship with reproducers that need a session on the account being tested,
+  never a cross-account tool; where a full weaponisation would cross that line (cache
+  flushing, session theft), the request shape, the responses and the negative controls are
+  the evidence instead.
+- Illustrations that are not screenshots are labelled as reconstructions in the caption.
+  The four animated figures under `assets/img/anim/` are drawn diagrams, not screen
+  captures, and say so in both the caption and the image itself.
 
 ---
 

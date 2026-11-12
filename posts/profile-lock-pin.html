@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lock That Read Out Its Own Combination — shoo0lin</title>
+<meta name="description" content="Netflix's Profile Lock returns the plaintext PIN of every profile on the account to any profile's session, including a kids profile. The gate enforces the PIN; the read path hands it over.">
+<meta name="author" content="shoo0lin">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The Lock That Read Out Its Own Combination">
+<meta property="og:description" content="A parental control returned the parental control's secret to the person the control exists to stop. Kids profile, one GraphQL query, four digits, unlocked.">
+<meta property="og:url" content="https://shoo0lin.github.io/posts/profile-lock-pin.html">
+<meta property="og:image" content="https://shoo0lin.github.io/assets/img/netflix/00-cover-pin.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://shoo0lin.github.io/assets/img/netflix/00-cover-pin.png">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23000000'/><rect x='30' y='30' width='40' height='40' fill='%23ff0000'/></svg>">
+</head>
+<body>
+
+<div class="rails" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><span class="dot"></span>shoo0lin<span class="slash">/</span>notes</a>
+    <nav class="nav">
+      <a href="../index.html">Posts</a>
+      <a href="#tldr">TL;DR</a>
+      <a href="#fix">The fix</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="post-hero">
+    <img class="post-hero-img contain" src="../assets/img/netflix/00-cover-pin.png" alt="Reconstruction of the response: a profile named 'the protected profile' with lockPin 0978 in clear text, alongside four profiles with null.">
+    <div class="wrap post-hero-inner">
+      <div class="c-tag">Netflix · GraphQL · Broken access control · Field finding</div>
+      <h1>The Lock That Read Out Its Own Combination</h1>
+      <p class="dek">Profile Lock is meant to stop the kids profile from opening a parent's profile. The gate enforces the PIN exactly as advertised — and the API hands the same PIN to whichever profile asks first.</p>
+      <div class="byline">
+        <span>11 Nov 2026</span>
+        <span>13 min read</span>
+        <span>CVSS 3.1 · 7.1 High</span>
+        <span>1 diagram · 3 captures · 1 clip · 5 checks</span>
+      </div>
+    </div>
+  </section>
+
+  <article class="article">
+    <div class="prose">
+
+      <div class="tldr" id="tldr">
+        <h2>TL;DR</h2>
+        <p><code>ProfileLockTemplate</code> is the query the profile picker uses to draw its tiles. It selects <code>lockPin</code> on <em>every</em> entry in <code>growthAccount.profiles</code>, and the resolver returns the stored PIN in cleartext — to whichever profile happens to be holding the session.</p>
+        <p>So: sit on the kids profile, send one query, read the parent's four digits, type them at <code>/ProfilesGate</code>, and the session becomes that profile. Verified end to end, from a kids profile and from a second non-owner profile.</p>
+        <p><strong>And the controls that make it a finding:</strong> with no cookie the query is <code>UNAUTHENTICATED</code>; with no PIN the gate blocks; with a wrong PIN the gate blocks; with the disclosed PIN the gate opens. The lock is genuinely enforced. The value returned by the read path is genuinely its key.</p>
+        <p><strong>And the boundary, stated up front:</strong> this needs a session on the same account. That is not a caveat bolted on afterwards — a co-user on a shared account is the adversary the feature exists to stop, and the principal it names most explicitly is a child on the kids profile. A control that fails against its own threat model is not rescued by that threat model.</p>
+      </div>
+
+      <div class="note">
+        <b>On the values in this page</b>
+        Profile names are replaced with their roles and profile GUIDs are truncated to eight characters. The PIN itself is the real value from my own household account, and the lock has since been removed — masking the one piece of evidence that matters would leave the page proving nothing. The whole test ran on my own account, against my own profiles, with no other person or account involved.
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="t">Contents</div>
+        <ol>
+          <li><a href="#question">A lock I set myself</a></li>
+          <li><a href="#promise">What the lock is for</a></li>
+          <li><a href="#query">One query, whole account</a></li>
+          <li><a href="#key">The value is the key</a></li>
+          <li><a href="#controls">The controls</a></li>
+          <li><a href="#asymmetry">Enforced on write, forgotten on read</a></li>
+          <li><a href="#amplifier">The amplifier I am not claiming</a></li>
+          <li><a href="#score">The honest score</a></li>
+          <li><a href="#fix">The fix</a></li>
+          <li><a href="#receipts">Receipts</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="question"><span class="ch">Prologue</span>A lock I set myself</h2>
+
+      <p class="dropcap">I set a PIN on my own profile for the ordinary reason: a child with a kids profile, a shared television, and a strong preference for being able to pick a series up where I left it.</p>
+
+      <p>Profile Lock is the feature for exactly that. You choose four digits, the locked tile grows a padlock in the picker, and opening it asks for the digits. Underneath, the picker is a GraphQL client like every other part of the site, and it needs the server to tell it which tiles are locked.</p>
+
+      <p>That is why <code>lockPin</code> exists as a field on the <code>Profile</code> type at all. Something has to answer the question <em>does this profile have a lock?</em></p>
+
+      <p>What I did not expect is that the same response would also answer the question <em>what is the lock's combination?</em> — for every profile on the account, addressed to whichever profile happened to be sitting on the other end of the connection.</p>
+
+      <figure>
+        <img src="../assets/img/anim/01-netflix-lockpin.gif" alt="Animated diagram: the kids profile sends ProfileLockTemplate and the response lists every profile with one lockPin populated, which then opens the locked profile." width="1200" height="675">
+        <figcaption><b>Reconstruction, not a capture.</b> The shape of the whole bug in four seconds: the kids profile asks for the picker's tiles, the response carries a populated <code>lockPin</code> beside four empty ones, and that value is what the gate accepts. The roles are drawn generically; the populated value is the one from the transcript below.</figcaption>
+      </figure>
+
+      <h2 id="promise"><span class="ch">Chapter 1</span>What the lock is for</h2>
+
+      <p>Netflix's own description of Profile Lock is unambiguous: it stops other people who use the same account from getting into a profile. The threat model is not a stranger on the internet. It is the other people on your account — a partner, a housemate, and most sharply, a child.</p>
+
+      <p>This account had five profiles. One had a PIN. The rest did not, which is normal: the lock exists to protect the one profile that matters. And the kids profile is deliberately the least privileged thing on the account — maturity-limited, separate viewing history, no route to billing or account settings.</p>
+
+      <p>It can still use the profile picker, because that is the point of it.</p>
+
+      <p>So the question that started this was narrow. Not <em>can I guess a PIN</em>, and not <em>can I reach somebody else's account</em>. Just: what does the picker ask the server, and what does the server answer?</p>
+
+      <h2 id="query"><span class="ch">Chapter 2</span>One query, whole account</h2>
+
+      <p>The picker runs a persisted query called <code>ProfileLockTemplate</code>. Persisted queries are how Netflix ships GraphQL: the client sends an identifier and a version, and the server holds the text. The text itself is not secret — it is in the browser bundle — and the interesting part is one line of the selection it ships:</p>
+
+      <pre><code>fragment ProfileLockTemplateAccount on Account {
+  profiles { guid name gender isAccountOwner isProfileCreationLocked lockPin }
+}</code><button class="copy">copy</button></pre>
+
+      <p>Two fields sit next to each other there, and they ask two very different questions. <code>isProfileCreationLocked</code> is the question the client needs: <em>is this tile locked?</em> <code>lockPin</code> is the answer to the question the client should never have been able to ask.</p>
+
+      <p>Sent from the kids profile, with nothing but that profile's own cookies:</p>
+
+      <pre><code>POST /graphql HTTP/2
+Host: www.netflix.com
+Content-Type: application/json
+
+{"operationName":"ProfileLockTemplate","variables":{},
+ "extensions":{"persistedQuery":{
+    "id":"d821963d-5bb5-43c7-a2d1-2cf7eab9f44e","version":102}}}</code><button class="copy">copy</button></pre>
+
+      <p>And the response, trimmed to the parts that matter, with names replaced by roles and GUIDs truncated:</p>
+
+      <pre><code>{"data":{
+  "currentProfile":{"guid":"NIADRLI3…","name":"kids"},
+  "growthAccount":{"profiles":[
+    {"guid":"VCWJWTGR…","name":"owner",        "lockPin":null},
+    {"guid":"OTSWWYH4…","name":"protected",    "lockPin":<span class="bad">"0978"</span>},
+    {"guid":"6DYO5LFG…","name":"second adult", "lockPin":null},
+    {"guid":"WSDEM6QW…","name":"spare",        "lockPin":null},
+    {"guid":"NIADRLI3…","name":"kids",         "lockPin":null}
+  ]}}}</code><button class="copy">copy</button></pre>
+
+      <p><code>currentProfile</code> is the kids profile, which is exactly right. The second entry in the array is my PIN: in quotes, in cleartext, in a response addressed to a child's session.</p>
+
+      <p>I repeated it from a second non-owner profile and got the same five rows with the same value. Then I repeated it with no cookie at all: <code>UNAUTHENTICATED</code> from <code>consumeridentitydgs</code>, <code>growthAccount: null</code>. The query is not public. It is scoped to <em>anyone on this account</em>, which is precisely the audience it must not be scoped to.</p>
+
+      <p>Nothing in that response is a placeholder. There is no reveal call, no second request, no transformation: the four characters the gate accepts are the four characters in the JSON body.</p>
+
+      <figure>
+        <img src="../assets/img/netflix/01-lockpin-response.png" alt="Terminal capture of the ProfileLockTemplate response: five profiles with lockPin null except one, which is populated in cleartext. Profile names and GUIDs are masked." width="1320" height="264">
+        <figcaption><b>Field capture, cropped and redacted.</b> All five rows from that response, as they arrived. The GUID and quoted-name columns are covered with a solid bar; the <code>lockPin</code> column is deliberately left readable, because it is the finding. It is the one value on this page that was not masked in either direction.</figcaption>
+      </figure>
+
+      <h2 id="key"><span class="ch">Chapter 3</span>The value is the key</h2>
+
+      <p>A leaked PIN is only a finding if the PIN is the thing that opens the lock, and if the lock holds at all. Both were testable in about a minute, in an ordinary browser, with no tooling:</p>
+
+      <pre><code>kids session                     the account's profiles
+────────────                     ──────────────────────
+    │  POST /graphql · ProfileLockTemplate
+    ├──► owner          lockPin: null
+    ├──► protected      lockPin: "0978"   ◄── the key
+    ├──► second adult   lockPin: null
+    └──► kids (self)    lockPin: null</code><button class="copy">copy</button></pre>
+
+      <p>The active profile is carried as a <code>pg</code> cookie parameter holding the profile GUID. Selecting the locked tile opens a PIN prompt. Submitting the value from the response:</p>
+
+      <pre><code>[start]   pg=NIADRLI3…   kids profile
+[gate]    locked tile selected → PIN prompt shown: true
+[submit]  0 9 7 8
+[final]   pg=OTSWWYH4…   RESULT: UNLOCKED
+[land]    /browse renders as the protected profile</code><button class="copy">copy</button></pre>
+
+      <p>That is the whole chain. A child's own session, one query, four digits copied out of a JSON body, and the next page load belongs to somebody else's profile — with that profile's viewing history, its list, and its maturity settings.</p>
+
+      <figure>
+        <img src="../assets/img/netflix/02-unlock-transcript.png" alt="Terminal capture of the final step: the PIN submitted, the pg profile parameter moving, and /browse loading as the protected profile. The profile GUID is masked." width="1350" height="147">
+        <figcaption><b>Field capture, redacted.</b> The tail of the gate run: the driver confirms the PIN prompt is real, fills four digits, and the next load reports <code>/browse</code> as the protected profile — <code>RESULT: UNLOCKED</code>. The <code>pg</code> value on the <code>[final]</code> line is masked; nothing else is.</figcaption>
+      </figure>
+
+      <figure>
+        <video controls preload="metadata" playsinline poster="../assets/img/netflix/demo-unlock-poster.jpg">
+          <source src="../assets/img/netflix/demo-unlock.mp4" type="video/mp4">
+          Your browser does not support the video tag. The stills above and below cover the same steps.
+        </video>
+        <figcaption><b>Field capture, 14 seconds, edited for length and redacted.</b> An edit of the source screen recording — the picker that offered the locked tile, the PIN prompt, the landing as the protected profile, and the terminal block that produced the value. Profile names and GUIDs are covered with a solid bar; the four digits are left readable because the lock they belong to has since been removed. The other four minutes of the recording are terminal output full of account identifiers, so they are not published. Nothing in this clip is a reconstruction.</figcaption>
+      </figure>
+
+      <h2 id="controls"><span class="ch">Chapter 4</span>The controls</h2>
+
+      <p>The wrong-PIN row is the one that makes the rest of this page honest. If the gate accepted anything, the disclosure would be noise. It does not.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What I did</th><th>What happened</th><th>What it establishes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Same query, no cookie</td>
+              <td><code>UNAUTHENTICATED</code> (<code>consumeridentitydgs</code>), <code>growthAccount: null</code></td>
+              <td>Not an anonymous read — the query is bound to a session</td>
+            </tr>
+            <tr>
+              <td>Locked tile, nothing submitted</td>
+              <td>Stays <code>pg=NIADRLI3…</code>, prompt remains</td>
+              <td>The gate blocks on absence, not just on wrongness</td>
+            </tr>
+            <tr>
+              <td>Locked tile, wrong PIN <code>1111</code></td>
+              <td>Stays <code>pg=NIADRLI3…</code></td>
+              <td>The gate is a real check, not a formality</td>
+            </tr>
+            <tr>
+              <td>Locked tile, disclosed PIN</td>
+              <td><code>pg=OTSWWYH4…</code>, <code>/browse</code> as the protected profile</td>
+              <td>The leaked value is the working key</td>
+            </tr>
+            <tr>
+              <td>Same query from a second non-owner profile</td>
+              <td>Identical five rows, identical PIN</td>
+              <td>Not a quirk of one session or one profile</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The empty-submission and wrong-PIN rows came first; the rest came after. That is the order they should always be taken in. The lock works. The value returned by the read path is the value the lock is waiting for.</p>
+
+      <h2 id="asymmetry"><span class="ch">Chapter 5</span>Enforced on write, forgotten on read</h2>
+
+      <p>Here is the part that stops this being an accident of one badly named field. The same system has a write path for the same secret, and the write path is correct.</p>
+
+      <p><code>growthSetProfilePin</code> and <code>growthRemoveProfilePin</code> both answer <code>PERMISSION_DENIED</code>, origin <code>passport</code>, unless the caller holds the account-level authorisation they require. That is a decision, made deliberately, in the same codebase, about the same four digits.</p>
+
+      <p>The read path has no equivalent decision. The resolver returns the stored PIN in cleartext for every entry in <code>growthAccount.profiles</code>, regardless of which profile is asking — not masked, not scoped to the current profile, not withheld until the PIN has been presented once. The value is a plain nullable string all the way through: the Android client's model declares it as a <code>String</code> (<code>kotlin/C19159hyi.java</code>, field <code>l</code>) and serialises it straight through (<code>kotlin/C19161hyk.java:586-588</code>).</p>
+
+      <p>The missing check is one sentence long, and it is the sentence every PIN prompt in the world is built on: <strong>a session may read its own profile's PIN, and only after that PIN has been presented in that session.</strong></p>
+
+      <h2 id="amplifier"><span class="ch">Chapter 6</span>The amplifier I am not claiming</h2>
+
+      <p>Netflix's GraphQL edge reflects the request <code>Origin</code> — any origin, including the literal <code>null</code> — and answers with <code>Access-Control-Allow-Credentials: true</code>, with no Origin validation and no CSRF token on the POST. That is a general property of the endpoint, and it applies to this query like any other: with a session attached, the response is readable from <code>https://evil.com</code>.</p>
+
+      <p>In a browser today it is not reachable that way. <code>NetflixId</code> is <code>SameSite=Lax</code> and <code>SecureNetflixId</code> is <code>Strict</code>, so a page on another site cannot get those cookies attached to the request. That is a browser control, not a server control, and it is currently the only thing standing between this bug and a remote PIN-theft primitive.</p>
+
+      <p>I am writing that down as context for the score, not as part of the finding. "It would be worse if the cookie policy changed" is not a vulnerability, and I am not going to bill for it. What is fair to say is that the server-side defence the cookie policy is substituting for does not exist: if the attribute is ever relaxed, or if anything gets a foothold in the <code>*.netflix.com</code> origin, the read path is already open and the response is already readable.</p>
+
+      <h2 id="score"><span class="ch">Chapter 7</span>The honest score</h2>
+
+      <p><strong>CVSS 3.1 · 7.1 High</strong> — <code>AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N</code>.</p>
+
+      <p>Every argument I have ever had about a score came from somebody rounding the prerequisite in their own favour, so here is mine in the open.</p>
+
+      <h3>Why the prerequisite does not rescue it</h3>
+
+      <p>"The attacker already has a profile on the account" sounds like mitigation until you read what the feature is for. Profile Lock is not an account-takeover defence. It is an intra-account boundary, and the principal it names as the adversary — a child on the kids profile — is exactly the principal that can read the PIN. A parental control that tells the child the combination is not partially working. It is not working.</p>
+
+      <h2 id="fix"><span class="ch">Chapter 8</span>The fix</h2>
+
+      <p>None of this is exotic, and the write path already shows the system knows how to gate this secret. It just doesn't do it on the read.</p>
+
+      <ul>
+        <li><strong>Never return the PIN.</strong> <code>isPinLocked: Boolean</code> answers the only question the picker needs, and a padlock can be drawn from a boolean.</li>
+        <li><strong>If a client genuinely needs to display an existing PIN</strong> — none does — return a masked placeholder, and put any reveal behind its own re-authenticated request.</li>
+        <li><strong>Scope the field.</strong> A session may read the PIN of the profile it is currently on, and only after presenting it once in that session.</li>
+        <li><strong>Verify at the gate, server-side, with an attempt counter.</strong> Ten thousand combinations is a small number of requests; the decision that matters should not be made by the client.</li>
+        <li><strong>Require the current PIN to change or remove it.</strong> Removing a lock without knowing the combination is its own small problem, and it sits in the same resolver pair.</li>
+      </ul>
+
+      <p>Add the read-side rule and the feature does what it says on the tin: the kids profile sees a padlock, the padlock does not volunteer the combination, and the adult profile stays the adult's.</p>
+
+      <h2 id="receipts"><span class="ch">Receipts</span>What the claim rests on</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Artefact</th><th>What it establishes</th></tr></thead>
+          <tbody>
+            <tr><td>One <code>POST</code> — <code>ProfileLockTemplate</code>, <code>d821963d…</code> v102, empty variables</td><td>A single request; no enumeration, no brute force, no second call</td></tr>
+            <tr><td>Response body</td><td>Five profiles returned, one <code>lockPin</code> populated in cleartext</td></tr>
+            <tr><td>No-cookie control</td><td><code>UNAUTHENTICATED</code> / <code>growthAccount: null</code> — the query is session-bound</td></tr>
+            <tr><td>Gate transcript</td><td><code>pg</code> moves from the kids GUID to the protected GUID; <code>/browse</code> renders as that profile</td></tr>
+            <tr><td>Wrong-PIN control</td><td>Session stays on the kids profile — the lock is real</td></tr>
+            <tr><td>Write path</td><td><code>growthSetProfilePin</code> / <code>growthRemoveProfilePin</code> → <code>PERMISSION_DENIED</code>, origin <code>passport</code></td></tr>
+            <tr><td>Client model</td><td><code>kotlin/C19159hyi.java</code> field <code>l</code>; <code>kotlin/C19161hyk.java:586-588</code></td></tr>
+            <tr><td>Scope</td><td>My own household account and profiles only; no other user, no other account</td></tr>
+            <tr><td><a href="https://github.com/shoo0lin/netflix-profile-lock-pin">shoo0lin/netflix-profile-lock-pin</a></td><td>Three harnesses, the redacted response, the control transcript, and the clip with its edit script</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The harnesses are public, because running them needs a session on the account being tested. That is the boundary the finding lives inside: every script takes a cookie file you supply for an account you control, none of them reach across accounts, and the read is masked by default. Run the read, run the two controls that must fail, then run the one that must succeed — in that order, so a broken harness fails loudly instead of quietly proving something.</p>
+
+      <p>There is a shorter version of this post. It says: a parental control returned the parental control's secret to the person the control exists to stop. Everything above is the working-out, kept because a claim about a parental control should be checkable by someone who does not trust me.</p>
+
+      <p>I still use the lock. The gate refuses the kids profile every time it is asked properly, and that is worth something. It just also answers — to anyone on the account who knows which query to send — the question the gate was there to ask.</p>
+
+      <p>A lock is not the combination. A lock is the decision to keep the combination to yourself.</p>
+
+      <hr>
+
+      <p style="color:var(--faint);font-size:14px">Tested on my own account against my own profiles. Profile names are replaced with their roles and GUIDs truncated; the PIN is shown because it is the evidence, and the lock has since been removed. No other user's data appears anywhere in this write-up.</p>
+
+      <hr>
+      <p class="next"><a href="dispatcher-cache.html">← Read: The Cache That Remembered a Stranger</a></p>
+
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 shoo0lin · notes from the seam between server and browser</span>
+    <span><a href="../index.html">← All posts</a></span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('pre').forEach(function (pre) {
+  var btn = pre.querySelector('.copy');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var code = pre.querySelector('code');
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      btn.textContent = 'copied';
+      setTimeout(function () { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -34,7 +34,7 @@
 
 <main>
   <section class="post-hero">
-    <img class="post-hero-img" src="../assets/img/aem/01-cache-hit.png" alt="Lab capture: an anonymous request answered with a cached authenticated identity.">
+    <img class="post-hero-img" src="../assets/img/aem/01-cache-hit.png" alt="Terminal capture: an anonymous request answered with a cached authenticated identity.">
     <div class="wrap post-hero-inner">
       <div class="c-tag">Adobe AEM · Cache misconfiguration · Field finding</div>
       <h1>The Cache That Remembered a Stranger</h1>
@@ -43,7 +43,7 @@
         <span>9 Nov 2026</span>
         <span>16 min read</span>
         <span>CVSS 3.1 · 5.3 Medium</span>
-        <span>4 figures · 34s lab clip</span>
+        <span>5 figures · 34s repro clip</span>
       </div>
     </div>
   </section>
@@ -185,6 +185,11 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
 
       <p>Same URL. Same headers. Same client. One character of query string apart. With the query string, the request misses the cache, reaches AEM, and AEM does exactly what it is supposed to do: refuse. Without it, Apache answers from a file on disk.</p>
 
+      <figure>
+        <img src="../assets/img/anim/02-aem-dispatcher.gif" alt="Animated diagram: one anonymous request warms the dispatcher cache for a security endpoint, after which every later request is served the cached authenticated identity." width="1200" height="675">
+        <figcaption><b>Reconstruction, not a capture.</b> Why the path is the whole problem: the cache key is the URL, so the first anonymous <code>GET</code> creates the entry and every later caller inherits whatever that entry says. No session is involved on either side. Draws the mechanism, not a screen.</figcaption>
+      </figure>
+
       <p>Four more observations close the case:</p>
 
       <ul>
@@ -196,7 +201,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
 
       <figure>
         <img src="../assets/img/aem/02-cache-miss.png" alt="Terminal output showing the query-string cache miss returning 401, the wrong-cookie request still served from cache, and two neighbour paths challenging." width="1500" height="1226">
-        <figcaption><b>The controls, from the local lab.</b> The query string changes the cache key, so the request reaches the origin and the origin says <code>401</code>; a bogus cookie changes nothing because the cookie is not in the key; the sibling paths in the same directory still challenge. Same three observations as the field, reproduced without touching a customer system.</figcaption>
+        <figcaption><b>The controls, from the local run.</b> The query string changes the cache key, so the request reaches the origin and the origin says <code>401</code>; a bogus cookie changes nothing because the cookie is not in the key; the sibling paths in the same directory still challenge. Same three observations as the field, reproduced without touching a customer system.</figcaption>
       </figure>
 
       <div class="note">
@@ -347,7 +352,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
             <tr><td>Neighbour matrix</td><td>Four other protected paths correctly challenged on the first host</td></tr>
             <tr><td>Header set</td><td><code>X-Dispatcher</code>, <code>X-Vhost: author</code>, <code>Last-Modified</code> from 2024–2025</td></tr>
             <tr><td>Fleet table</td><td>2 customers, 4 dispatchers, 2 regions, 4 environments, 9–21 months stale</td></tr>
-            <tr><td><a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">Reproducer + lab</a></td><td>Self-contained mock origin and dispatcher, vulnerable and patched; redacting field probe</td></tr>
+            <tr><td><a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">Reproducer</a></td><td>Self-contained mock origin and dispatcher, vulnerable and patched; redacting field probe</td></tr>
           </tbody>
         </table>
       </div>
@@ -370,7 +375,7 @@ $ curl -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' \
       <p style="color:var(--faint);font-size:14px">Identities, hostnames, and internal paths are redacted here and in the public copy of this page. No customer data beyond the identity fields described was accessed, and no authentication was attempted. The reproduction — mock origin, mock dispatcher, vulnerable and patched configurations, plus the redacting field probe — is at <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">github.com/shoo0lin/aem-dispatcher-cache-leak</a>.</p>
 
       <hr>
-      <p class="next"><a href="click-to-root.html">← Read the lab series: The Click That Ended at uid=0</a></p>
+      <p class="next"><a href="click-to-root.html">← Read the next note: The Click That Ended at uid=0</a></p>
 
     </div>
   </article>

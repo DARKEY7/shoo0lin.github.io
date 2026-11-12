@@ -37,7 +37,7 @@
       <h1>Notes from the seam between <em>server</em> and browser.</h1>
       <p class="lede">I hunt the places where two components disagree about the same value — where the filter says no, the framework says yes, and the page looks clean right up until the click.</p>
       <div class="hero-meta">
-        <span>Bugs found in labs &amp; disclosed responsibly</span>
+        <span>Real bugs, disclosed responsibly</span>
         <span>No inflated severities</span>
         <span>Receipts attached</span>
       </div>
@@ -49,7 +49,7 @@
       <div class="section-label">Featured insight</div>
       <a class="feature" href="posts/dispatcher-cache.html">
         <div class="feature-media">
-          <img src="assets/img/aem/01-cache-hit.png" alt="Lab terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache.">
+          <img src="assets/img/aem/01-cache-hit.png" alt="Terminal capture: an anonymous request served an authenticated session identity from the dispatcher cache.">
           <span class="play">&#9654; 34s clip</span>
         </div>
         <div class="feature-body">
@@ -70,17 +70,33 @@
   <section class="posts-section wrap" id="posts">
     <div class="section-head">
       <h2>Posts</h2>
-      <span class="mono">Lab series · two parts</span>
+      <span class="mono">Field notes · 2026</span>
     </div>
 
     <div class="post-grid">
+
+      <a class="card" href="posts/profile-lock-pin.html">
+        <div class="card-thumb">
+          <img src="assets/img/netflix/00-cover-pin.png" alt="Reconstruction: one profile's lockPin returned as 0978 in cleartext, four others null.">
+        </div>
+        <div class="card-body">
+          <div class="c-tag">Netflix · GraphQL · Broken access control</div>
+          <h2>The Lock That Read Out Its Own Combination</h2>
+          <p>Profile Lock exists to keep the kids profile out of a parent's profile. The gate enforces the PIN; the read path returns that same PIN, in cleartext, to any profile on the account. One query, four digits, unlocked.</p>
+          <div class="c-meta">
+            <span>11 Nov 2026</span>
+            <span>13 min read</span>
+            <span>CVSS 7.1 High</span>
+          </div>
+        </div>
+      </a>
 
       <a class="card" href="posts/interactivity-accordion.html">
         <div class="card-thumb">
           <img src="assets/img/01-source-confirmed.png" alt="Terminal capture: the stored payload confirmed in the served page.">
         </div>
         <div class="card-body">
-          <div class="c-tag">WordPress · Stored XSS · Lab-verified · Part I</div>
+          <div class="c-tag">WordPress · Stored XSS · Reproduced · Part I</div>
           <h2>The Accordion That Opened a Door</h2>
           <p>WordPress's server-side HTML writer enforces URL policy; the client-side Interactivity API enforces none. An Author smuggles <code>javascript:</code> through a <code>data-wp-context</code> blob, the served page stays clean, and one administrator click turns a guest-writer account into administrator authority.</p>
           <div class="c-meta">
@@ -96,7 +112,7 @@
           <img src="assets/img/rce/03-rce-exfil.png" alt="Capture: the webshell response and outbound callback proving command execution.">
         </div>
         <div class="card-body">
-          <div class="c-tag">WordPress · Stored XSS → RCE · Lab-verified · Part II</div>
+          <div class="c-tag">WordPress · Stored XSS → RCE · Reproduced · Part II</div>
           <h2>The Click That Ended at uid=0</h2>
           <p>The same six lines of markup, followed further. An Administrator's plugin editor is a keyboard with admin hands on it: the XSS harvests the editor nonce, writes a PHP webshell over <code>hello.php</code>, and the next request returns root — proven by a changed file hash and an outbound callback.</p>
           <div class="c-meta">
@@ -112,7 +128,7 @@
 
   <section class="accent-strip">
     <div class="wrap">
-      <span>Both WordPress write-ups ship with a runnable lab</span>
+      <span>Both WordPress write-ups ship with a runnable repro</span>
       <a href="https://github.com/shoo0lin/wp-interactivity-xss">PoC repositories &rarr;</a>
     </div>
   </section>
@@ -121,8 +137,9 @@
     <div class="wrap">
       <div class="section-label">About these notes</div>
       <h2>Every hunt, including the wrong turns</h2>
-      <p>Each post is a hunt written the way it happened: the wrong first hypothesis, the control that killed it, the evidence that survived. Everything is reproduced in an isolated lab unless stated otherwise, and every severity claim is separated from the impact proof on purpose.</p>
-      <p>The WordPress write-ups ship with runnable code: <a href="https://github.com/shoo0lin/wp-interactivity-xss">shoo0lin/wp-interactivity-xss</a> contains the disposable Docker lab, the PoC scripts, the captured evidence, and the patched directive. The AEM piece has its own: <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">shoo0lin/aem-dispatcher-cache-leak</a> is a mock origin and dispatcher in both configurations, plus the redacting field probe.</p>
+      <p>Each post is a hunt written the way it happened: the wrong first hypothesis, the control that killed it, the evidence that survived. Where a step ran on a machine I control rather than against someone's production, the post says so, and every severity claim is separated from the impact proof on purpose.</p>
+      <p>The WordPress write-ups ship with runnable code: <a href="https://github.com/shoo0lin/wp-interactivity-xss">shoo0lin/wp-interactivity-xss</a> contains the disposable Docker repro, the PoC scripts, the captured evidence, and the patched directive. The AEM piece has its own: <a href="https://github.com/shoo0lin/aem-dispatcher-cache-leak">shoo0lin/aem-dispatcher-cache-leak</a> is a mock origin and dispatcher in both configurations, plus the redacting field probe.</p>
+      <p>The Netflix piece has one too: <a href="https://github.com/shoo0lin/netflix-profile-lock-pin">shoo0lin/netflix-profile-lock-pin</a> holds the persisted-query read, the gate walk, the no-PIN / wrong-PIN / right-PIN controls, the redacted response and the clip. Every script needs a cookie file for an account you control — that is the boundary the finding lives inside, and nothing cross-account ships.</p>
       <p>Corrections and replications are welcome — open an issue on <a href="https://github.com/shoo0lin" rel="me">GitHub</a>.</p>
     </div>
   </section>

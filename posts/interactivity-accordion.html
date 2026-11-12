@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Accordion That Opened a Door — shoo0lin</title>
-<meta name="description" content="A stored XSS in WordPress's Interactivity API: the server enforces a URL policy, the client enforces none. Lab-verified privilege escalation from Author to Administrator with one click.">
+<meta name="description" content="A stored XSS in WordPress's Interactivity API: the server enforces a URL policy, the client enforces none. Reproduced privilege escalation from Author to Administrator with one click.">
 <meta name="author" content="shoo0lin">
 <meta property="og:type" content="article">
 <meta property="og:title" content="The Accordion That Opened a Door">
-<meta property="og:description" content="How a client/server policy mismatch in WordPress's Interactivity API turned a harmless link into administrator code execution — lab-verified.">
+<meta property="og:description" content="How a client/server policy mismatch in WordPress's Interactivity API turned a harmless link into administrator code execution — watched end to end.">
 <meta property="og:url" content="https://shoo0lin.github.io/posts/interactivity-accordion.html">
 <meta property="og:image" content="https://shoo0lin.github.io/assets/img/03-admin-vs-anon.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -34,9 +34,9 @@
 
 <main>
   <section class="post-hero">
-    <img class="post-hero-img" src="../assets/img/01-source-confirmed.png" alt="Lab capture: the stored payload confirmed in the served page.">
+    <img class="post-hero-img" src="../assets/img/01-source-confirmed.png" alt="Terminal capture: the stored payload confirmed in the served page.">
     <div class="wrap post-hero-inner">
-      <div class="c-tag">WordPress · Stored XSS · Lab-verified</div>
+      <div class="c-tag">WordPress · Stored XSS · Reproduced</div>
       <h1>The Accordion That Opened a Door</h1>
       <p class="dek">Two halves of the same WordPress feature disagreed about what a link may contain. One half checked. The other half trusted. An Author — no special powers, no <code>unfiltered_html</code>, no administrator approval — walked through the gap and ended up holding an administrator's session.</p>
       <div class="byline">
@@ -55,12 +55,12 @@
         <h2>TL;DR</h2>
         <p>WordPress core's server-side HTML writer enforces URL policy. The client-side Interactivity API directive resolver enforces <em>none</em>. A Contributor or Author can therefore smuggle <code>javascript:</code> inside a <code>data-wp-context</code> JSON blob — the exact scheme <code>wp_kses_post()</code> strips from a normal <code>href</code> on the same tag — and the client re-injects it into the live <code>href</code> at hydration.</p>
         <p>The served HTML looks clean. A <code>curl</code> says the page is safe. A real browser says otherwise. One click by an Administrator executes the payload in the Administrator's own origin and with the Administrator's own session.</p>
-        <p class="win" style="border:0;padding:0;margin:0;background:none;color:var(--text)">Demonstrated end-to-end in an isolated local lab: read the admin identity and all 62 capabilities, create a post as the admin, read it back, force-delete it. Anonymous control on the same payload: <code>401</code>, no write. Not tested against production — read the scope note before the pitchforks.</p>
+        <p class="win" style="border:0;padding:0;margin:0;background:none;color:var(--text)">Demonstrated end-to-end on an isolated local Docker instance: read the admin identity and all 62 capabilities, create a post as the admin, read it back, force-delete it. Anonymous control on the same payload: <code>401</code>, no write. Not tested against production — read the scope note before the pitchforks.</p>
       </div>
 
       <div class="note">
         <b>Code and evidence</b>
-        The full lab harness is public: <a href="https://github.com/shoo0lin/wp-interactivity-xss">github.com/shoo0lin/wp-interactivity-xss</a> — disposable Docker lab, the validator, the escalation chains, captured JSON, and the patched directive. Lab only; point it at a box you own.
+        The full harness is public: <a href="https://github.com/shoo0lin/wp-interactivity-xss">github.com/shoo0lin/wp-interactivity-xss</a> — disposable Docker setup, the validator, the escalation chains, captured JSON, and the patched directive. Reproduction only; point it at a box you own.
       </div>
 
       <nav class="toc" aria-label="Contents">
@@ -85,7 +85,7 @@
 
       <p>WordPress 7.x ships the Interactivity API. You put a <code>data-wp-context</code> JSON blob on an element, point a directive at it, and the client-side runtime keeps the DOM in sync. For a link you write <code>data-wp-bind--href="context.u"</code>. On hydration, the browser copies <code>context.u</code> into the live <code>href</code>.</p>
 
-      <p>So I published a post containing this, as an Author account in an isolated Docker lab:</p>
+      <p>So I published a post containing this, as an Author account in an isolated Docker instance:</p>
 
       <pre><code>&lt;div id="bind-island" data-wp-interactive="pwn"
      data-wp-context='{"u":"javascript:window.__INTERACTIVITY_BIND_TEST__=1"}'
@@ -105,7 +105,7 @@
 
       <figure>
         <img src="../assets/img/01-source-confirmed.png" alt="Terminal capture: the directive resolver source confirmed with no scheme check, followed by the author account lacking unfiltered_html and the REST application password being minted." loading="lazy">
-        <figcaption><b>Figure 1.</b> Source confirmed, then the ingress prepared. The resolver excludes <code>href</code> from the property fast-path, so execution always falls through to <code>setAttribute(attribute, result)</code> — with no scheme check anywhere before it. Below that: the Author account genuinely lacks <code>unfiltered_html</code>. (Lab credential redacted.)</figcaption>
+        <figcaption><b>Figure 1.</b> Source confirmed, then the ingress prepared. The resolver excludes <code>href</code> from the property fast-path, so execution always falls through to <code>setAttribute(attribute, result)</code> — with no scheme check anywhere before it. Below that: the Author account genuinely lacks <code>unfiltered_html</code>. (Bench credential redacted.)</figcaption>
       </figure>
 
       <h2 id="two-writers"><span class="ch">Chapter 1</span>Two writers, one rulebook</h2>
@@ -175,6 +175,11 @@ OUT: &lt;div data-wp-context="{&amp;quot;u&amp;quot;:<span class="hl">"javascrip
 
       <p>That is the whole trick. The filter was not broken. It was asked the wrong question — it inspected the attribute <em>names</em> it knew, and the payload travelled under a name it did not police.</p>
 
+      <figure>
+        <img src="../assets/img/anim/03-wp-urlpolicy.gif" alt="Animated diagram: the same javascript URL is stripped from a literal href by wp_kses_post but survives untouched inside data-wp-context, where the client later writes it back into href." width="1200" height="675">
+        <figcaption><b>Reconstruction, not a capture.</b> One string, two verdicts: the literal <code>href</code> loses its scheme at the filter, the same value inside <code>data-wp-context</code> passes through, and the client rebuilds the dangerous attribute after hydration. The frames are drawn; the before-and-after strings are the bench's actual output.</figcaption>
+      </figure>
+
       <p>And because an Author can publish directly (HTTP <code>201</code>, <code>status: publish</code>), no administrator has to approve the malicious content at the publish step. The Contributor path is only slightly slower: their post lands in the admin's pending queue, the admin previews or publishes it, and the same island hydrates in the admin's session.</p>
 
       <h2 id="click"><span class="ch">Chapter 3</span>The click</h2>
@@ -191,13 +196,13 @@ document.querySelector('#m-href').href
 
       <p>Nothing navigates on its own. The bind directive only sets <code>href</code>; a human has to click. I want to be precise about that boundary because it is the difference between a High and a Critical, and I refuse to inflate it: <strong>this is a one-click primitive, not zero-click.</strong></p>
 
-      <p>But the delivery is automatic. The payload sits in a normal published post, so the island hydrates on the front page, on month and category archives, in search results, in the RSS feed, and in <code>content.rendered</code> from the REST API — no attacker-specific URL required. On the lab front page alone, 15 islands hydrated and the directive rewrote the link.</p>
+      <p>But the delivery is automatic. The payload sits in a normal published post, so the island hydrates on the front page, on month and category archives, in search results, in the RSS feed, and in <code>content.rendered</code> from the REST API — no attacker-specific URL required. On the front page of that instance alone, 15 islands hydrated and the directive rewrote the link.</p>
 
       <p>Click it as an anonymous visitor: JavaScript runs, but the authority is nobody's — <code>401</code>, nothing to steal. Click it as an Administrator: the script is now standing inside an authenticated admin origin, and the ambient session does the rest.</p>
 
       <h2 id="admin"><span class="ch">Chapter 4</span>Admin in the crosshairs</h2>
 
-      <p>For the privileged run, the payload was rewritten to do two things: read the admin's identity and capabilities, then perform a write as the admin. The lab had a real administrator (<code>bindadmin</code>, id 7) and a real Author (id 4, no <code>unfiltered_html</code>). The Author published. The admin clicked.</p>
+      <p>For the privileged run, the payload was rewritten to do two things: read the admin's identity and capabilities, then perform a write as the admin. The bench had a real administrator (<code>bindadmin</code>, id 7) and a real Author (id 4, no <code>unfiltered_html</code>). The Author published. The admin clicked.</p>
 
       <p>First, the read. The script scrapes the <code>createNonceMiddleware</code> nonce out of <code>/wp-admin/</code>, then calls <code>/wp/v2/users/me?context=edit</code> with the victim's own cookie:</p>
 
@@ -305,7 +310,7 @@ document.querySelector('#m-href').href
 
       <div class="warn">
         <b>Scope, stated plainly</b>
-        <p style="margin:6px 0 0">Everything above was observed in an isolated local Docker lab (<code>127.0.0.1:18080</code>, container <code>wpsite</code>). No production WordPress system was contacted. The WordPress HackerOne program's scope document returned HTTP 404 at the time of testing, so — per my own rule that ambiguous scope means stop — production testing was halted before it began. The business-impact mapping in the next section is an inference drawn from the lab proof, and it is labelled as such. No remote code execution is claimed. No plugin installation was performed. The write primitive shown is post create → read → force-delete.</p>
+        <p style="margin:6px 0 0">Everything above was observed on an isolated local Docker instance (<code>127.0.0.1:18080</code>, container <code>wpsite</code>). No production WordPress system was contacted. The WordPress HackerOne program's scope document returned HTTP 404 at the time of testing, so — per my own rule that ambiguous scope means stop — production testing was halted before it began. The business-impact mapping in the next section is an inference drawn from the local proof, and it is labelled as such. No remote code execution is claimed. No plugin installation was performed. The write primitive shown is post create → read → force-delete.</p>
       </div>
 
       <p>What the primitive is worth, though, is not subtle. An Author — the role people hand out to guest writers — can end up holding an administrator's nonce. With that they inherit the entire authenticated REST surface the admin can reach: user creation and promotion, plugin installation, content destruction, settings, exports, anything the 62 capabilities open. The cross-tenant elevation is real; only the click is required.</p>
@@ -334,7 +339,7 @@ el.setAttribute( attribute, result );</code><button class="copy">copy</button></
 
       <h2 id="receipts"><span class="ch">Epilogue</span>Receipts</h2>
 
-      <p>I keep the boring artefacts because they are what survives triage. Everything below was captured in the lab on 9 October 2026.</p>
+      <p>I keep the boring artefacts because they are what survives triage. Everything below was captured on 9 October 2026.</p>
 
       <div class="table-wrap">
         <table>
@@ -352,7 +357,7 @@ el.setAttribute( attribute, result );</code><button class="copy">copy</button></
         </table>
       </div>
 
-      <p>Affected revisions: <code>wordpress-develop</code> at <code>49b718f16e</code> (present in lab 7.1.2) for the server side; Gutenberg <code>5715a61334c4d29f21b67cf34b46061dc1b62502</code> — the SHA WordPress 7.1.2 ships — for the client. The bundled module was served as <code>/wp-includes/js/dist/script-modules/interactivity/index.min.js?ver=efaa5193bbad9c60ffd1</code>.</p>
+      <p>Affected revisions: <code>wordpress-develop</code> at <code>49b718f16e</code> (present in the 7.1.2 image) for the server side; Gutenberg <code>5715a61334c4d29f21b67cf34b46061dc1b62502</code> — the SHA WordPress 7.1.2 ships — for the client. The bundled module was served as <code>/wp-includes/js/dist/script-modules/interactivity/index.min.js?ver=efaa5193bbad9c60ffd1</code>.</p>
 
       <p>Two things I would tell the next person holding this bug. First: <strong>a clean curl proves nothing about a hydrated page.</strong> The server and the browser are two different programs wearing the same URL, and the interesting bugs live in the seam. Second: <strong>keep the failures.</strong> The variant matrix, the probe that lied (Figure 3), the anonymous control — those are the parts that turn a scary-looking demo into a report somebody can actually action.</p>
 
@@ -360,7 +365,7 @@ el.setAttribute( attribute, result );</code><button class="copy">copy</button></
 
       <hr>
 
-      <p style="color:var(--faint);font-size:14px">Disclosure status: lab-verified only; no production system contacted. Report shared with the WordPress program; program scope document returned HTTP 404 at the time of testing, so upstream status is pending. This page will be updated if that changes.</p>
+      <p style="color:var(--faint);font-size:14px">Disclosure status: reproduced only; no production system contacted. Report shared with the WordPress program; program scope document returned HTTP 404 at the time of testing, so upstream status is pending. This page will be updated if that changes.</p>
 
     </div>
   </article>

