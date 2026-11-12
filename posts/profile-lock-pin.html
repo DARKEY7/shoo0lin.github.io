@@ -67,7 +67,7 @@
       <nav class="toc" aria-label="Contents">
         <div class="t">Contents</div>
         <ol>
-          <li><a href="#question">A lock I set myself</a></li>
+          <li><a href="#question">The configuration the feature is sold for</a></li>
           <li><a href="#promise">What the lock is for</a></li>
           <li><a href="#query">One query, whole account</a></li>
           <li><a href="#key">The value is the key</a></li>
@@ -80,11 +80,11 @@
         </ol>
       </nav>
 
-      <h2 id="question"><span class="ch">Prologue</span>A lock I set myself</h2>
+      <h2 id="question"><span class="ch">Prologue</span>The configuration the feature is sold for</h2>
 
-      <p class="dropcap">I set a PIN on my own profile for the ordinary reason: a child with a kids profile, a shared television, and a strong preference for being able to pick a series up where I left it.</p>
+      <p class="dropcap">The account had five profiles: one locked, four not, and a kids profile that is meant to be the least privileged thing on it. That is the configuration the feature exists for.</p>
 
-      <p>Profile Lock is the feature for exactly that. You choose four digits, the locked tile grows a padlock in the picker, and opening it asks for the digits. Underneath, the picker is a GraphQL client like every other part of the site, and it needs the server to tell it which tiles are locked.</p>
+      <p>Profile Lock is the feature built for it. You choose four digits, the locked tile grows a padlock in the picker, and opening it asks for the digits. Underneath, the picker is a GraphQL client like every other part of the site, and it needs the server to tell it which tiles are locked.</p>
 
       <p>That is why <code>lockPin</code> exists as a field on the <code>Profile</code> type at all. Something has to answer the question <em>does this profile have a lock?</em></p>
 
@@ -99,7 +99,7 @@
 
       <p>Netflix's own description of Profile Lock is unambiguous: it stops other people who use the same account from getting into a profile. The threat model is not a stranger on the internet. It is the other people on your account — a partner, a housemate, and most sharply, a child.</p>
 
-      <p>This account had five profiles. One had a PIN. The rest did not, which is normal: the lock exists to protect the one profile that matters. And the kids profile is deliberately the least privileged thing on the account — maturity-limited, separate viewing history, no route to billing or account settings.</p>
+      <p>The lock exists to protect the one profile that matters. The kids profile, for its part, is deliberately limited: maturity-restricted, separate viewing history, no route to billing or account settings.</p>
 
       <p>It can still use the profile picker, because that is the point of it.</p>
 
