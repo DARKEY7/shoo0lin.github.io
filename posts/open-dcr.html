@@ -43,7 +43,7 @@
         <span>12 Nov 2026</span>
         <span>14 min read</span>
         <span>CVSS 3.1 · 6.5 Medium</span>
-        <span>1 diagram · 4 captures · 6 checks</span>
+        <span>1 recording · 1 diagram · 4 captures · 6 checks</span>
       </div>
     </div>
   </section>
@@ -61,7 +61,7 @@
 
       <div class="note">
         <b>On the values in this page</b>
-        The consenting identity in these captures is my own Adobe account. Account identifiers — <code>client_id</code> tails, the authorization code, the <code>state</code> value, and every token — are masked or truncated. No other user's account appears anywhere in this write-up, and no account was enumerated for publication; the response shape is shown with a placeholder address and the fields that identify a person removed.
+        The consenting identity in these captures is my own Adobe account. Account identifiers — <code>client_id</code> tails, the authorization code, the <code>state</code> value, and every token — are masked or truncated. The recording is spliced from two moments and its terminal segments are omitted rather than blanked, because they print a working client secret and code over scrolling text. No other user's account appears anywhere in this write-up, and no account was enumerated for publication; the response shape is shown with a placeholder address and the fields that identify a person removed.
       </div>
 
       <nav class="toc" aria-label="Contents">
@@ -293,6 +293,14 @@ grant_type=authorization_code
       </figure>
 
       <p>Twenty-four hours of access, plus a refresh token because <code>offline_access</code> was in the requested scope. For a client that was created by a single unauthenticated POST and approved by one click on a card that could not name it.</p>
+
+      <figure>
+        <video controls preload="metadata" playsinline poster="../assets/img/adobe/06-video-poster.jpg" width="1600" height="676">
+          <source src="../assets/video/adobe-open-dcr-flow.mp4" type="video/mp4">
+          Your browser does not support the video element. The same two moments are in the stills above.
+        </video>
+        <figcaption><b>Recording, spliced and redacted.</b> The two moments a user actually sees, cut from one continuous run: the consent card, then the page that answers on <code>127.0.0.1</code>. The browser chrome band is masked on both segments — the address bar carries the live code and the tab title repeats its opening characters — and on the card the signed-in identity and the tail of the <code>client_id</code> are covered with a solid bar. Audio removed. The terminal segments are cut rather than redacted: they print a working <code>client_id</code>, client secret, PKCE verifier and authorization code, the text scrolls, and there is no static region left to mask. The last frame is held for a moment so the landing page can be read.</figcaption>
+      </figure>
 
       <h2 id="boundary"><span class="ch">Chapter 6</span>Where the chain stops</h2>
 
