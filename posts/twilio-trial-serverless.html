@@ -41,7 +41,7 @@
       <p class="dek">A free trial account can deploy code to Twilio's Serverless runtime. That code reads the Lambda execution role's credentials out of <code>/proc/self/environ</code> and uses them from a laptop. The part my first draft got wrong is what those credentials can reach — and the part Twilio got right is printed in the message itself.</p>
       <div class="byline">
         <span>13 Nov 2026</span>
-        <span>13 min read</span>
+        <span>12 min read</span>
         <span>CVSS 3.1 · 4.3 Medium</span>
         <span>1 diagram · 1 capture</span>
       </div>
@@ -67,7 +67,6 @@
       <nav class="toc" aria-label="Contents">
         <div class="t">Contents</div>
         <ol>
-          <li><a href="#prologue">The report with the 9.9 on it</a></li>
           <li><a href="#deploy">What a trial account can deploy</a></li>
           <li><a href="#environ">Reading the environment</a></li>
           <li><a href="#offhost">Using the credential from a laptop</a></li>
@@ -79,14 +78,6 @@
         </ol>
       </nav>
 
-      <h2 id="prologue"><span class="ch">Prologue</span>The report with the 9.9 on it</h2>
-
-      <p class="dropcap">The first version of this was a critical. Trial account to production AWS. Credential exfiltration. Financial abuse. Persistent access. SMS spam. Full account takeover. Nine point nine, five legs, each with a screenshot. It read the way a good report reads, which is the problem: a report reads well when the story is coherent, and coherent is not the same as true.</p>
-
-      <p>Going back through the bundle to build this page, three of those five legs did not survive their own artefacts. The one that mattered most was contradicted by a line the run had printed itself, in the same JSON response the report was quoting to prove it. No evidence changed between the two drafts. My reading of it did.</p>
-
-      <p>So this page runs the other direction. It starts from what the functions returned and keeps only what those returns support — including the part where the answer is "a free account gets working credentials for a production role, and the role can write its own log file", which is a real finding and a small one. The interesting thing here is not that a trial account can reach a Lambda credential. It is how little that credential is worth, how loudly the trial product announces itself, and how much of the first draft was the sound of me not checking.</p>
-
       <figure>
         <img src="../assets/img/anim/06-twilio-trial.gif" alt="Animated diagram of five steps: a trial account deploys a function, the function runs on Lambda, /proc/self/environ returns the role credentials, the credentials answer GetCallerIdentity from a laptop, and the role's demonstrated permissions are its own log group." width="1200" height="675">
         <figcaption><b>Reconstruction, not a capture.</b> The chain as far as the evidence actually goes. The right-hand panel is the run's own response, with the values masked; the lower band is the line that changes the severity — <code>parent_token_present: false</code>. The last step is the important one: the credentials work, and then they do very little.</figcaption>
@@ -94,7 +85,7 @@
 
       <h2 id="deploy"><span class="ch">Chapter 1</span>What a trial account can deploy</h2>
 
-      <p>Twilio's Serverless product lets you upload JavaScript functions and get a public HTTPS endpoint per function. The account here was a trial: no card, no upgrade, an email address and a phone number verified, and a $15.50 promotional balance. That is the entire bar. The CLI did the rest.</p>
+      <p class="dropcap">Twilio's Serverless product lets you upload JavaScript functions and get a public HTTPS endpoint per function. The account here was a trial: no card, no upgrade, an email address and a phone number verified, and a $15.50 promotional balance. That is the entire bar. The CLI did the rest.</p>
 
       <pre><code>twilio serverless:deploy --service-sid "ZS7e106d…" --force
 
@@ -232,7 +223,7 @@ Status: queued</code><button class="copy">copy</button></pre>
 
       <h2 id="survived"><span class="ch">Chapter 5</span>What actually survived</h2>
 
-      <p>So what is left when the five legs are put through their own artefacts?</p>
+      <p>So what is left when the first draft's claims are put through their own artefacts?</p>
 
       <div class="table-wrap">
         <table>
