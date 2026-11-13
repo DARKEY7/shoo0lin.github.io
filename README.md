@@ -11,15 +11,17 @@
 A static site built by hand — no framework, no trackers, no external fonts — and the
 long-form write-ups behind it. The first two posts are a stored XSS in WordPress's
 Interactivity API that escalates an Author to Administrator authority with a single
-click; the three field findings are a Dispatcher cache leak of per-session identity on
+click; the four field findings are a Dispatcher cache leak of per-session identity on
 AEM author tiers, Netflix's Profile Lock handing the plaintext PIN of every profile to
-any profile's session, and Adobe IMS issuing a working OAuth client to an unauthenticated
-`POST` — with a consent card that has no name to put on it.
+any profile's session, Adobe IMS issuing a working OAuth client to an unauthenticated
+`POST` — with a consent card that has no name to put on it — and a Twilio trial account
+reading the Lambda execution role's credentials out of its own Serverless function.
 
 ## Posts
 
 | # | Title | What it covers |
 |---|---|---|
+| — | [Sent From Your Twilio Trial Account](https://shoo0lin.github.io/posts/twilio-trial-serverless.html) | A trial account with no payment method deploys to Twilio's Serverless runtime; user code reads the Lambda execution role's `ASIA…` credentials from `/proc/self/environ` and uses them off-host. Discloses the AWS account id, role ARN and log-group path, with demonstrable permission limited to the function's own log group. `parent_token_present: false` in the run's own output killed the account-takeover leg; the trial watermark killed the spam leg. Published as a teardown of the author's own 9.9. CVSS 4.3. |
 | — | [The App Nobody Had to Approve](https://shoo0lin.github.io/posts/open-dcr.html) | Adobe IMS `POST /ims/register` issues a public OAuth client with no authentication — no account, plan, or review. The consent card shows the `client_id` as the app name; the credential unlocks account lookup at `auth.services.adobe.com`. Loopback redirect, so no cross-user ATO demonstrated. CVSS 6.5. |
 | — | [The Lock That Read Out Its Own Combination](https://shoo0lin.github.io/posts/profile-lock-pin.html) | `ProfileLockTemplate` returns every profile's `lockPin` in cleartext to any session on the account, kids profile included; the gate enforces the PIN, the read path discloses it. Four controls. CVSS 7.1. |
 | I | [The Accordion That Opened a Door](https://shoo0lin.github.io/posts/interactivity-accordion.html) | The client/server URL-policy mismatch; stored XSS; 62-capability read and an admin write after one click. CVSS ≈ 8.8. |
@@ -346,6 +348,7 @@ el.setAttribute( attribute, result );
 .
 ├── index.html                              # home / post index
 ├── posts/
+│   ├── twilio-trial-serverless.html        # Twilio trial Serverless → Lambda role credentials
 │   ├── open-dcr.html                       # Adobe IMS open DCR + consent card
 │   ├── profile-lock-pin.html               # Netflix Profile Lock PIN disclosure
 │   ├── interactivity-accordion.html        # part I — the primitive
@@ -356,6 +359,7 @@ el.setAttribute( attribute, result );
 │   └── img/
 │       ├── anim/                           # one animated reconstruction per post
 │       ├── adobe/                          # DCR consent/token stills, cover, generators
+│       ├── twilio/                         # trial SMS capture, cover, generators
 │       ├── netflix/                        # field stills, 14s edited clip, cover, generators
 │       ├── aem/                            # dispatcher stills + 34s demo clip
 │       └── rce/                            # part II captures + 42s demo clip
@@ -391,7 +395,7 @@ python3 -m http.server 8000
   flushing, session theft), the request shape, the responses and the negative controls are
   the evidence instead.
 - Illustrations that are not screenshots are labelled as reconstructions in the caption.
-  The five animated figures under `assets/img/anim/` are drawn diagrams, not screen
+  The six animated figures under `assets/img/anim/` are drawn diagrams, not screen
   captures, and say so in both the caption and the image itself.
 
 ---

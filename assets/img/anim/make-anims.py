@@ -436,6 +436,82 @@ def adobe():
     s.save("05-open-dcr.gif")
 
 
+def twilio():
+    s = Scene("trial account", 6)
+    steps = [
+        ("1", "POST /proof", "a trial account, no card, deploys it"),
+        ("2", "/proc/self/environ", "the execution role's ASIA key + token"),
+        ("3", "sts get-caller-identity", "used from a laptop \u2014 account 606\u2026"),
+        ("4", "logs put-log-events", "one write: its own log group"),
+        ("5", "parent_token_present", "false \u2014 no parent account reached"),
+    ]
+
+    rail = {
+        1: [("200 OK", RED), ("", MID),
+            ("roster: trial", MID), ("balance: $15.50", MID), ("", MID),
+            ("no payment method", MID)],
+        2: [("AWS_ACCESS_KEY_ID", MID), ("  ASIAY2IZEHUX\u2026", RED), ("", MID),
+            ("AWS_SESSION_TOKEN", MID), ("  present, 1100 ch", MID), ("", MID),
+            ("AWS_REGION us-east-1", MID)],
+        3: [("Account 606179966\u2026", RED), ("", MID),
+            ("Arn  \u2026assumed-role/", MID), ("     lambda-role-", MID),
+            ("     execution/\u2026", MID), ("", MID),
+            ("valid; says nothing", MID), ("about permission", DIM)],
+        4: [("nextSequenceToken", MID), ("  496703\u2026", RED), ("", MID),
+            ("log group:", MID), ("  /aws/lambda/ZBe\u2026", MID), ("", MID),
+            ("its own logs, by design", MID)],
+        5: [("\"parent_token_present\"", RED), ("  false", RED), ("", MID),
+            ("\"auth_token_present\"", MID), ("  true  \u2190 my own", MID), ("", MID),
+            ("no privilege gained", INK)],
+    }
+
+    def paint(d, n, boundary):
+        y = 132
+        for i, (num, what, how) in enumerate(steps):
+            done = i < n
+            cur = i == n - 1
+            col = RED if cur else (INK if done else DIM)
+            d.rectangle([M, y + i * 74, M + 34, y + i * 74 + 34],
+                        outline=RED if (done or cur) else LINE, width=2 if cur else 1)
+            d.text((M + 17, y + i * 74 + 17), num, font=mono(16, True),
+                   fill=RED if (done or cur) else DIM, anchor="mm")
+            f = fit_sans(d, what, 18, 600)
+            d.text((M + 56, y + i * 74 + 3), what, font=f, fill=col)
+            f2 = fit(d, how, None, 14, 600)
+            d.text((M + 56, y + i * 74 + 30), how, font=f2, fill=RED if cur else DIM)
+
+        # right rail: what step n actually hands back
+        box = [846, 150, W - M, 430]
+        block(d, box, outline=RED if boundary else LINE, width=2 if boundary else 1)
+        d.text((box[0] + 18, box[1] + 14), "RUN OUTPUT", font=mono(12, True), fill=DIM)
+        ly = box[1] + 48
+        for text, col in rail[n]:
+            if text:
+                f = fit(d, text, None, 14, box[2] - box[0] - 34)
+                d.text((box[0] + 18, ly), text, font=f, fill=col)
+            ly += 26
+
+        # lower band: where the blast radius actually stops
+        d.line([M, 500, W - M, 500], fill=LINE)
+        if boundary:
+            d.text((M, 520), "the credentials work, then they write their own logs.",
+                   font=fit(d, "the credentials work, then they write their own logs.",
+                            None, 21, 1070),
+                   fill=INK)
+            d.text((M, 558), "no parent token, no other tenant, no third-party "
+                             "destination \u2014 4.3, not 9.9.",
+                   font=fit(d, "no parent token, no other tenant, no third-party "
+                               "destination \u2014 4.3, not 9.9.", None, 15, 1070),
+                   fill=RED)
+
+    seq = [(1, False, 420), (2, False, 520), (2, False, 200), (3, False, 620),
+           (4, False, 520), (5, False, 700), (5, True, 1900)]
+    for n, b, ms in seq:
+        s.frame(lambda d, n=n, b=b: paint(d, n, b), ms)
+        s.durations.append(ms)
+    s.save("06-twilio-trial.gif")
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     netflix()
@@ -443,3 +519,4 @@ if __name__ == "__main__":
     wp()
     root()
     adobe()
+    twilio()

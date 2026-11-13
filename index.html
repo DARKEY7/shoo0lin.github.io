@@ -75,6 +75,22 @@
 
     <div class="post-grid">
 
+      <a class="card" href="posts/twilio-trial-serverless.html">
+        <div class="card-thumb">
+          <img src="assets/img/twilio/00-cover-twilio.png" alt="Reconstruction of the function's JSON response: masked AWS key, session token present, and parent_token_present false highlighted in red.">
+        </div>
+        <div class="card-body">
+          <div class="c-tag">Twilio Serverless · Trial accounts · Cloud credentials · Field finding</div>
+          <h2>Sent From Your Twilio Trial Account</h2>
+          <p>A card-less trial account deploys code to Twilio's Serverless runtime, and that code reads the Lambda execution role's credentials out of <code>/proc/self/environ</code>. They work from a laptop — for a role that reaches its own log group and nothing else. The run's own output says <code>parent_token_present: false</code>, and the SMS arrived watermarked. I scored it 9.9 first; this is the 4.3 version.</p>
+          <div class="c-meta">
+            <span>13 Nov 2026</span>
+            <span>13 min read</span>
+            <span>CVSS 4.3 Medium</span>
+          </div>
+        </div>
+      </a>
+
       <a class="card" href="posts/open-dcr.html">
         <div class="card-thumb">
           <img src="assets/img/adobe/00-cover-dcr.png" alt="Reconstruction: an unauthenticated POST to Adobe's IMS registration endpoint answered with 201 and a client_id.">
