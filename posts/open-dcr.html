@@ -161,7 +161,7 @@ Content-Type: application/json
             <tr>
               <td><code>"token_endpoint_auth_method": "private_key_jwt"</code></td>
               <td>Rejected</td>
-              <td>Public clients only. Which is consistent: there is no secret to give you, because there is no approval step to attach it to.</td>
+              <td>Rejected. The endpoint will also mint a confidential client — an earlier request against the same host asking for <code>client_secret_basic</code> came back with a <code>client_secret</code> — but this write-up uses the public path, because that is the one with no credential to leak.</td>
             </tr>
           </tbody>
         </table>
@@ -275,7 +275,7 @@ Host: ims-na1.adobelogin.com</code><button class="copy">copy</button></pre>
 
       <p>It is a JWT, and decoding it shows what it is scoped to: issuer and authorization server <code>ims-na1</code>, the <code>client_id</code>, a <code>user_id</code>, the granted scopes (<code>openid</code>, <code>AdobeID</code>, <code>email</code>), and a creation timestamp. Nothing exotic — a normal authorization code, for a client that did not exist two minutes earlier.</p>
 
-      <p>Then the exchange. Because the client is public, there is no secret; the PKCE verifier is the only proof that the party redeeming the code is the party that started the flow:</p>
+      <p>Then the exchange. Because the client registered here is public, there is no secret; the PKCE verifier is the only proof that the party redeeming the code is the party that started the flow:</p>
 
       <pre><code>POST /ims/token/v3 HTTP/2
 Host: ims-na1.adobelogin.com
@@ -299,7 +299,7 @@ grant_type=authorization_code
           <source src="../assets/video/adobe-open-dcr-flow.mp4" type="video/mp4">
           Your browser does not support the video element. The same two moments are in the stills above.
         </video>
-        <figcaption><b>Recording, spliced and redacted.</b> The two moments a user actually sees, cut from one continuous run: the consent card, then the page that answers on <code>127.0.0.1</code>. The browser chrome band is masked on both segments — the address bar carries the live code and the tab title repeats its opening characters — and on the card the signed-in identity and the tail of the <code>client_id</code> are covered with a solid bar. Audio removed. The terminal segments are cut rather than redacted: they print a working <code>client_id</code>, client secret, PKCE verifier and authorization code, the text scrolls, and there is no static region left to mask. The last frame is held for a moment so the landing page can be read.</figcaption>
+        <figcaption><b>Recording, spliced and redacted.</b> The two moments a user actually sees, cut from one continuous run: the consent card, then the page that answers on <code>127.0.0.1</code>. The browser chrome band is masked on both segments — the address bar carries the live code and the tab title repeats its opening characters — and on the card the signed-in identity and the tail of the <code>client_id</code> are covered with a solid bar. Audio removed. The terminal segments are cut rather than redacted: they print a working <code>client_id</code>, the client secret from an earlier confidential-client registration on the same endpoint, the PKCE verifier and the authorization code, the text scrolls, and there is no static region left to mask. The last frame is held for a moment so the landing page can be read.</figcaption>
       </figure>
 
       <h2 id="boundary"><span class="ch">Chapter 6</span>Where the chain stops</h2>
