@@ -11,14 +11,16 @@
 A static site built by hand — no framework, no trackers, no external fonts — and the
 long-form write-ups behind it. The first two posts are a stored XSS in WordPress's
 Interactivity API that escalates an Author to Administrator authority with a single
-click; the two field findings are a Dispatcher cache leak of per-session identity on
-AEM author tiers, and Netflix's Profile Lock handing the plaintext PIN of every
-profile to any profile's session.
+click; the three field findings are a Dispatcher cache leak of per-session identity on
+AEM author tiers, Netflix's Profile Lock handing the plaintext PIN of every profile to
+any profile's session, and Adobe IMS issuing a working OAuth client to an unauthenticated
+`POST` — with a consent card that has no name to put on it.
 
 ## Posts
 
 | # | Title | What it covers |
 |---|---|---|
+| — | [The App Nobody Had to Approve](https://shoo0lin.github.io/posts/open-dcr.html) | Adobe IMS `POST /ims/register` issues a public OAuth client with no authentication — no account, plan, or review. The consent card shows the `client_id` as the app name; the credential unlocks account lookup at `auth.services.adobe.com`. Loopback redirect, so no cross-user ATO demonstrated. CVSS 6.5. |
 | — | [The Lock That Read Out Its Own Combination](https://shoo0lin.github.io/posts/profile-lock-pin.html) | `ProfileLockTemplate` returns every profile's `lockPin` in cleartext to any session on the account, kids profile included; the gate enforces the PIN, the read path discloses it. Four controls. CVSS 7.1. |
 | I | [The Accordion That Opened a Door](https://shoo0lin.github.io/posts/interactivity-accordion.html) | The client/server URL-policy mismatch; stored XSS; 62-capability read and an admin write after one click. CVSS ≈ 8.8. |
 | II | [The Click That Ended at uid=0](https://shoo0lin.github.io/posts/click-to-root.html) | The same primitive pushed through the admin plugin editor: nonce harvest → `hello.php` overwrite → command execution, confirmed by hash and by an outbound callback. |
@@ -66,6 +68,11 @@ The harnesses behind the posts live in separate repositories:
   the persisted-query read, the gate walk, the no-PIN / wrong-PIN / right-PIN controls, the
   redacted response and transcript, and the clip with the edit script that produced it. Needs
   a cookie file for an account you control; no cross-account path exists to ship.
+- **[shoo0lin/adobe-ims-open-dcr](https://github.com/shoo0lin/adobe-ims-open-dcr)** — five Ruby
+  harnesses (stdlib only): unauthenticated registration, the PKCE authorize flow with a loopback
+  listener, the code-for-token exchange, the single-address lookup gate showing all three response
+  states, and the 23-variant redirect matrix. No bulk enumeration mode; the flow runs against an
+  account you own.
 
 ---
 
@@ -339,6 +346,7 @@ el.setAttribute( attribute, result );
 .
 ├── index.html                              # home / post index
 ├── posts/
+│   ├── open-dcr.html                       # Adobe IMS open DCR + consent card
 │   ├── profile-lock-pin.html               # Netflix Profile Lock PIN disclosure
 │   ├── interactivity-accordion.html        # part I — the primitive
 │   ├── click-to-root.html                  # part II — escalation to RCE
@@ -347,6 +355,7 @@ el.setAttribute( attribute, result );
 │   ├── css/style.css                       # one hand-written stylesheet
 │   └── img/
 │       ├── anim/                           # one animated reconstruction per post
+│       ├── adobe/                          # DCR consent/token stills, cover, generators
 │       ├── netflix/                        # field stills, 14s edited clip, cover, generators
 │       ├── aem/                            # dispatcher stills + 34s demo clip
 │       └── rce/                            # part II captures + 42s demo clip
@@ -382,7 +391,7 @@ python3 -m http.server 8000
   flushing, session theft), the request shape, the responses and the negative controls are
   the evidence instead.
 - Illustrations that are not screenshots are labelled as reconstructions in the caption.
-  The four animated figures under `assets/img/anim/` are drawn diagrams, not screen
+  The five animated figures under `assets/img/anim/` are drawn diagrams, not screen
   captures, and say so in both the caption and the image itself.
 
 ---

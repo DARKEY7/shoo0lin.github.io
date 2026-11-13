@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The App Nobody Had to Approve — shoo0lin</title>
+<meta name="description" content="Adobe's IMS registration endpoint issues a working OAuth client to anyone with curl and no credentials. The consent card that follows names the app by its own client_id — because the name was never a human decision.">
+<meta name="author" content="shoo0lin">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The App Nobody Had to Approve">
+<meta property="og:description" content="One unauthenticated POST returns a public OAuth client with localhost redirects and refresh tokens. The consent screen then asks a user to trust an app whose name is a random number.">
+<meta property="og:url" content="https://shoo0lin.github.io/posts/open-dcr.html">
+<meta property="og:image" content="https://shoo0lin.github.io/assets/img/adobe/00-cover-dcr.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://shoo0lin.github.io/assets/img/adobe/00-cover-dcr.png">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23000000'/><rect x='30' y='30' width='40' height='40' fill='%23ff0000'/></svg>">
+</head>
+<body>
+
+<div class="rails" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><span class="dot"></span>shoo0lin<span class="slash">/</span>notes</a>
+    <nav class="nav">
+      <a href="../index.html">Posts</a>
+      <a href="#tldr">TL;DR</a>
+      <a href="#fix">The fix</a>
+      <a class="hide-sm" href="https://github.com/shoo0lin" rel="me">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="post-hero">
+    <img class="post-hero-img contain" src="../assets/img/adobe/00-cover-dcr.png" alt="Reconstruction of the registration exchange: a POST to /ims/register with no Authorization header answered by 201 Created and a client_id.">
+    <div class="wrap post-hero-inner">
+      <div class="c-tag">Adobe IMS · OAuth · Open dynamic client registration · Field finding</div>
+      <h1>The App Nobody Had to Approve</h1>
+      <p class="dek">Adobe's identity service will issue you an OAuth client on request — no account, no developer console, no review. The consent screen that follows names the app by its own 32-hex <code>client_id</code>, which is the server quietly admitting that no human has ever looked at it.</p>
+      <div class="byline">
+        <span>12 Nov 2026</span>
+        <span>14 min read</span>
+        <span>CVSS 3.1 · 6.5 Medium</span>
+        <span>1 diagram · 4 captures · 6 checks</span>
+      </div>
+    </div>
+  </section>
+
+  <article class="article">
+    <div class="prose">
+
+      <div class="tldr" id="tldr">
+        <h2>TL;DR</h2>
+        <p><code>POST https://ims-na1.adobelogin.com/ims/register</code> accepts a JSON body and returns <strong>201 Created</strong> with a live OAuth <code>client_id</code>. No Authorization header, no cookie, no developer account, no API plan, no support ticket. Dynamic client registration (RFC 7591) is open to the internet.</p>
+        <p>The client that comes back is public — <code>token_endpoint_auth_method: "none"</code> — with <code>authorization_code</code> granted, <code>offline_access</code> available on request, and a redirect URI that must point at loopback. That last constraint is what keeps it from being a remote takeover: the authorization code is delivered to a socket on the <em>victim's</em> machine, not the attacker's.</p>
+        <p>What it does buy, with no user interaction at all, is a working <code>x-ims-clientid</code> header for <code>auth.services.adobe.com/signin/v2/users/accounts</code> — the account-lookup endpoint that otherwise only answers clients Adobe provisioned by hand. One POST replaces a support-approved credential.</p>
+        <p><strong>And the boundary, stated up front:</strong> registration is unauthenticated and enumeration is proven end to end, but I did not demonstrate a cross-user account takeover. The code lands on the victim's own loopback, so catching it needs a foothold on their machine — which is a post-compromise amplifier, not an entry point. The score below reflects that, not the larger number in my own working notes.</p>
+      </div>
+
+      <div class="note">
+        <b>On the values in this page</b>
+        The consenting identity in these captures is my own Adobe account. Account identifiers — <code>client_id</code> tails, the authorization code, the <code>state</code> value, and every token — are masked or truncated. No other user's account appears anywhere in this write-up, and no account was enumerated for publication; the response shape is shown with a placeholder address and the fields that identify a person removed.
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="t">Contents</div>
+        <ol>
+          <li><a href="#prologue">The card that names itself</a></li>
+          <li><a href="#register">One POST, no credentials</a></li>
+          <li><a href="#handback">What registration hands back</a></li>
+          <li><a href="#unlocks">What the credential unlocks</a></li>
+          <li><a href="#consent">The consent card</a></li>
+          <li><a href="#loopback">The code comes home</a></li>
+          <li><a href="#boundary">Where the chain stops</a></li>
+          <li><a href="#blocks">What I could not break</a></li>
+          <li><a href="#score">The honest score</a></li>
+          <li><a href="#fix">The fix</a></li>
+          <li><a href="#receipts">Receipts</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="prologue"><span class="ch">Prologue</span>The card that names itself</h2>
+
+      <p class="dropcap">An OAuth consent screen is a trust decision rendered as a button. It tells you which application is asking, what it wants, and who is on the other end — and then it asks you to approve. The whole thing rests on the first line: the name.</p>
+
+      <p>So when I registered a client against Adobe's identity service and walked it through the flow, the card that appeared said, in the position where the application name goes, <code>82734d52…</code>. Thirty-two hexadecimal characters. A number where a name should be.</p>
+
+      <p>That is not a display bug. The registration request had included a <code>client_name</code> — I had asked for <em>Adobe Creative Cloud Desktop</em>, deliberately, to see what the server would do with a claim like that. The server ignored it and wrote the <code>client_id</code> into the field instead.</p>
+
+      <p>Which is the correct thing to do, security-wise: it stops me from dressing a phishing flow in a name the user already trusts. But it also means the card is telling the truth. There is no name to show, because there is no application behind this client, and no person ever approved it. The override that prevents impersonation doubles as proof that the registry has no idea who I am.</p>
+
+      <figure>
+        <img src="../assets/img/anim/05-open-dcr.gif" alt="Animated diagram of the five-step chain: an unauthenticated POST to /ims/register returns 201, the authorize endpoint renders a consent card, the browser is redirected to 127.0.0.1 with a code, and the token endpoint returns 200." width="1200" height="675">
+        <figcaption><b>Reconstruction, not a capture.</b> The shape of the whole chain, including the step it stops at: the redirect goes to <code>127.0.0.1</code>, which is the victim's machine. The values are drawn from the transcript below; the exchange panel and the boundary line are the two things this page is actually about.</figcaption>
+      </figure>
+
+      <h2 id="register"><span class="ch">Chapter 1</span>One POST, no credentials</h2>
+
+      <p>Dynamic client registration exists so that a client can introduce itself to an authorization server and get credentials without a human in the loop. The specification is explicit that the endpoint is <em>sensitive</em>, and equally explicit that it is the deployment's job to protect it: RFC 7591 §3 offers an initial access token, a pre-registered software statement, or an open endpoint, and leaves the choice to the implementer.</p>
+
+      <p>Adobe chose open. This is the entire request:</p>
+
+      <pre><code>POST /ims/register HTTP/2
+Host: ims-na1.adobelogin.com
+Content-Type: application/json
+Content-Length: 141
+
+{"redirect_uris":["http://127.0.0.1:9999/cb"],
+ "grant_types":["authorization_code"],
+ "token_endpoint_auth_method":"none",
+ "scope":"AdobeID openid email"}</code><button class="copy">copy</button></pre>
+
+      <p>No <code>Authorization</code> header. No cookie. No <code>Origin</code> worth speaking of, no developer-console session, no API key, no plan subscription, no support ticket. And the answer:</p>
+
+      <pre><code>HTTP/2 201 Created
+Content-Type: application/json
+
+{"client_id":"82734d52…",
+ "client_id_issued_at":1751… ,
+ "redirect_uris":["http://127.0.0.1:9999/cb"],
+ "token_endpoint_auth_method":"none",
+ "grant_types":["authorization_code"],
+ "response_types":["code"],
+ "client_name":"82734d52…",
+ "scope":"AdobeID email openid"}</code><button class="copy">copy</button></pre>
+
+      <p>That <code>client_id</code> is not a sandbox artefact or a stub. It is accepted at the authorization endpoint, at the token endpoint, and at a second host that never appears in the registration flow at all — which is where this stops being an RFC-compliancy argument and becomes a capability.</p>
+
+      <p>I ran it sixty-five times while mapping the edge cases, roughly 0.6 seconds apart, and never saw a throttle. Registration is not rate limited in any way I could provoke.</p>
+
+      <h2 id="handback"><span class="ch">Chapter 2</span>What registration hands back</h2>
+
+      <p>The interesting part of an open registration endpoint is not that it answers. It is which of your inputs it honours, and which of its own answers it lets you influence. I asked for a few things the fields allow and recorded what came back:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What I sent</th><th>What came back</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>"client_name": "Adobe Creative Cloud Desktop"</code></td>
+              <td><code>"client_name": "&lt;client_id&gt;"</code></td>
+              <td>The name is overwritten server-side. Good control — it removes the impersonation primitive — and it is why the consent card has nothing human to show.</td>
+            </tr>
+            <tr>
+              <td><code>logo_uri</code>, <code>client_uri</code>, <code>policy_uri</code>, <code>tos_uri</code>, <code>contacts</code></td>
+              <td>Echoed nowhere; absent from the response</td>
+              <td>The metadata an app would use to look legitimate is not stored, so it cannot be shown. The card cannot misrepresent an app it has no data about.</td>
+            </tr>
+            <tr>
+              <td><code>"scope": "openid email profile address offline_access"</code></td>
+              <td>All five granted, <code>201</code></td>
+              <td>Identity scopes plus <code>offline_access</code> — which is what makes refresh tokens available to the client.</td>
+            </tr>
+            <tr>
+              <td><code>"grant_types": ["client_credentials"]</code></td>
+              <td><code>400</code> — grant type not permitted for DCR</td>
+              <td>Machine-to-machine and password grants are explicitly refused. Only the interactive code flow is on offer.</td>
+            </tr>
+            <tr>
+              <td><code>"token_endpoint_auth_method": "private_key_jwt"</code></td>
+              <td>Rejected</td>
+              <td>Public clients only. Which is consistent: there is no secret to give you, because there is no approval step to attach it to.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Read that table as a list of design decisions, because that is what it is. Somebody thought about this endpoint. They decided that a client must not be able to name itself, that it must not be able to point anywhere but loopback, and that it must not be able to ask for a grant that runs without a user present. Those are the decisions of a team that knew exactly what an open registration endpoint exposes.</p>
+
+      <p>What they did not decide is who gets to call it.</p>
+
+      <h2 id="unlocks"><span class="ch">Chapter 3</span>What the credential unlocks</h2>
+
+      <p>A <code>client_id</code> that only works at the two OAuth endpoints would be a curiosity. It works at a third host, and that one is not part of the OAuth flow at all.</p>
+
+      <p><code>auth.services.adobe.com/signin/v2/users/accounts</code> is the account-lookup call the login page makes to decide what to show you next. It takes an email address and returns what Adobe knows about the account behind it. Its only authentication is the <code>x-ims-clientid</code> header.</p>
+
+      <pre><code>POST /signin/v2/users/accounts HTTP/2
+Host: auth.services.adobe.com
+Content-Type: application/json
+x-ims-clientid: 82734d52…            ← the DCR client
+
+{"email":"someone@example.com"}</code><button class="copy">copy</button></pre>
+
+      <p>And the shape of a hit, trimmed to the fields that matter and with the identifier-bearing ones removed:</p>
+
+      <pre><code>HTTP/2 200 OK
+[{"type":"individual",
+  "status":{"code":"active"},
+  "hasT2ELinked":false,
+  "authenticationMethods":[{"id":"password"},{"id":"otp"}],
+  "images":[{"50":"…removed…"}]}]</code><button class="copy">copy</button></pre>
+
+      <p>That is a lot to hand back for one unauthenticated registration. <code>hasT2ELinked</code> is whether a second factor is attached. <code>authenticationMethods</code> tells you whether the account logs in with a password, an OTP, or a SAML redirect to an enterprise IdP. <code>status.code</code> distinguishes active accounts from incomplete ones and ones flagged for a password reset. <code>type</code> separates consumer accounts from enterprise ones.</p>
+
+      <p>Read together, those fields sort a list of users by how easy they are to attack: no second factor and password-only is the credential-stuffing pile, <code>redirect</code> is the enterprise-phishing pile, <code>incomplete</code> is the registration-completion pile. Nothing in the response is a secret. Everything in it is a targeting decision.</p>
+
+      <p>The no-header control is the part that makes this a finding rather than a public API:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Request</th><th>Response</th><th>What it establishes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>No <code>x-ims-clientid</code> header</td>
+              <td><code>400</code> <code>clientId must not be empty: null</code></td>
+              <td>The endpoint requires a client credential</td>
+            </tr>
+            <tr>
+              <td>Made-up client id</td>
+              <td><code>404</code> <code>Could not find resource for id …</code></td>
+              <td>Any string will not do; the id has to exist in the registry</td>
+            </tr>
+            <tr>
+              <td>A client id I registered thirty seconds earlier, unauthenticated</td>
+              <td><code>200</code> with the account shape above</td>
+              <td>The registry entry <em>is</em> the credential, and registration is open</td>
+            </tr>
+            <tr>
+              <td>Same again after roughly fifteen rapid calls</td>
+              <td><code>429</code></td>
+              <td>Enumeration is throttled by IP, not by client. A fresh client id does not reset it; a fresh address does.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The rate limit is worth being precise about, because it is the one thing standing between this and a census. It is per source address, and it is not defeated by registering more clients — I tried. It <em>is</em> defeated by sending the requests from somewhere else, which is a commodity. At commercial proxy scale, the throttle is a cost, not a barrier.</p>
+
+      <p>A second host behaves the same way. The staging environment — <code>ims-na1-stg1.adobelogin.com</code> for registration, <code>auth-stg1.services.adobe.com</code> for lookup — accepted a staging-registered client and answered <code>200</code> identically. Whatever the fix is, it has to land in both.</p>
+
+      <h2 id="consent"><span class="ch">Chapter 4</span>The consent card</h2>
+
+      <p>Now the interactive half. Take the <code>client_id</code> and build an authorization URL. Adobe requires PKCE here — omit <code>code_challenge</code> and the endpoint answers <code>invalid_request</code> — so the request carries an S256 challenge:</p>
+
+      <pre><code>GET /ims/authorize/v2?client_id=82734d52…
+  &amp;response_type=code
+  &amp;redirect_uri=http://127.0.0.1:9999/cb
+  &amp;scope=openid+email+AdobeID
+  &amp;state=&lt;random&gt;
+  &amp;code_challenge=&lt;S256(verifier)&gt;
+  &amp;code_challenge_method=S256
+Host: ims-na1.adobelogin.com</code><button class="copy">copy</button></pre>
+
+      <p>With no session, that redirects to <code>auth.services.adobe.com/en_US/index.html?callback=…</code> and a login page. Sign in, and the card appears:</p>
+
+      <figure>
+        <img src="../assets/img/adobe/01-consent.png" alt="Capture of the Adobe consent card: the application name row masked, the requesting-consent sentence, a Sign you in section, and the Allow Access button." width="960" height="524">
+        <figcaption><b>Field capture, cropped and redacted.</b> The card Adobe renders for a client that was registered ninety seconds earlier with no credentials. The application-name row and the signed-in identity are covered with a solid bar — the row under it is the point: the name in that row is the <code>client_id</code>. The scopes listed are the identity scopes from the request.</figcaption>
+      </figure>
+
+      <p>Everything about this card is professionally done. It names the requesting party, it enumerates what will be shared, it says who is signed in and offers to switch, and it asks for an explicit approval. It is the kind of screen that gets shown in a security-awareness deck as an example of consent done properly.</p>
+
+      <p>The one thing it cannot do is tell you who is asking, because nobody knows. The name field is populated from the registry, the registry has a name only if a human gave it one, and open registration means nobody did. So it prints the identifier. A user is being asked to authorise an application and the only thing the dialog can say about that application is a number.</p>
+
+      <p>I want to be careful about how much weight that carries, because "the consent screen looks odd" is not a vulnerability on its own. It is evidence. It is the visible surface of an approval process that does not exist — and unlike an argument about RFC language, it is something a user can see and a triager can reproduce in four clicks.</p>
+
+      <h2 id="loopback"><span class="ch">Chapter 5</span>The code comes home</h2>
+
+      <p>Approve the card, and the browser is redirected:</p>
+
+      <figure>
+        <img src="../assets/img/adobe/02-loopback.png" alt="Capture of the browser address bar showing a redirect to http://127.0.0.1:9999/cb?code= with the code value masked." width="1560" height="174">
+        <figcaption><b>Field capture, cropped and redacted.</b> The address bar on the redirect. The host is <code>127.0.0.1</code> and the path carries <code>?code=</code>; everything after it is masked. This single line is the boundary the whole finding lives inside, which is why it gets its own figure.</figcaption>
+      </figure>
+
+      <p>Loopback. The authorization code — the thing that can be exchanged for an access token, a refresh token, and an ID token — has been delivered to a port on the machine that ran the flow. In the test that machine was mine, and a listener I had started was waiting there:</p>
+
+      <figure>
+        <img src="../assets/img/adobe/03-code-captured.png" alt="Terminal capture: the callback listener reporting CODE CAPTURED followed by an authorization code beginning eyJhbGci, with the code body masked." width="1600" height="512">
+        <figcaption><b>Field capture, cropped and redacted.</b> The listener's output: the callback arrived, the code was captured, and the code is a JWT — <code>eyJhbGci</code> is the base64 of <code>{"alg":…</code>. The token body is masked; the header is left visible so the format is checkable.</figcaption>
+      </figure>
+
+      <p>It is a JWT, and decoding it shows what it is scoped to: issuer and authorization server <code>ims-na1</code>, the <code>client_id</code>, a <code>user_id</code>, the granted scopes (<code>openid</code>, <code>AdobeID</code>, <code>email</code>), and a creation timestamp. Nothing exotic — a normal authorization code, for a client that did not exist two minutes earlier.</p>
+
+      <p>Then the exchange. Because the client is public, there is no secret; the PKCE verifier is the only proof that the party redeeming the code is the party that started the flow:</p>
+
+      <pre><code>POST /ims/token/v3 HTTP/2
+Host: ims-na1.adobelogin.com
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic &lt;client_id&gt;:      ← empty password
+
+grant_type=authorization_code
+&amp;code=&lt;code&gt;
+&amp;redirect_uri=http://127.0.0.1:9999/cb
+&amp;code_verifier=&lt;verifier&gt;</code><button class="copy">copy</button></pre>
+
+      <figure>
+        <img src="../assets/img/adobe/04-token-200.png" alt="Terminal capture: HTTP 200 from the token endpoint with token_type bearer and expires_in 86399, the token values masked." width="1600" height="620">
+        <figcaption><b>Field capture, cropped and redacted.</b> <code>HTTP 200</code> from <code>/ims/token/v3</code>: <code>token_type: bearer</code>, <code>expires_in: 86399</code>. Access, refresh and ID token values are covered with a solid bar. A 200 here is the end of the chain and the best possible evidence that the client is real — a token endpoint that did not recognise the client would have answered <code>invalid_client</code> instead.</figcaption>
+      </figure>
+
+      <p>Twenty-four hours of access, plus a refresh token because <code>offline_access</code> was in the requested scope. For a client that was created by a single unauthenticated POST and approved by one click on a card that could not name it.</p>
+
+      <h2 id="boundary"><span class="ch">Chapter 6</span>Where the chain stops</h2>
+
+      <p>Here is the part I am not going to dress up. Every step above is real and reproducible, and none of it crosses a user boundary by itself.</p>
+
+      <p>The code was delivered to <code>127.0.0.1</code> — loopback on the machine running the browser. For this to be somebody else's account takeover, the code would have to land somewhere the attacker can read. The registration endpoint refuses every redirect URI that is not loopback: external hosts, other IP formats, IDN and hex-encoded addresses, <code>data:</code> URIs, fragments, protocol-relative paths, <code>nip.io</code> names, and traversal tricks all come back <code>invalid_redirect_uri</code>. Twenty-three variants, one answer.</p>
+
+      <p>So the only ways to receive a victim's code are:</p>
+
+      <ul>
+        <li><strong>A listener already running on the victim's machine.</strong> That is a foothold the attacker has to have first. Once you can bind a port on someone's host, an OAuth code for their Adobe ID is a nice bonus, not the reason you are there.</li>
+        <li><strong>An open redirect on an Adobe domain</strong> that preserves the query string and forwards to an attacker host. I looked for one and did not find one; without it, the loopback restriction holds.</li>
+        <li><strong>A DNS-rebinding style trick</strong> that makes the browser resolve an attacker-controlled name to loopback and then intercept the callback. The registration validator compares the redirect URI as a string and rejects non-literal loopback forms, which closes the variants I tried.</li>
+      </ul>
+
+      <p>Against a shared machine — a VDI desktop, a CI runner, a shared development server — the loopback redirect is a real hazard, because "the same machine" is exactly the condition the redirect assumes. But that is a same-machine ATO, which is a different and much smaller claim than "any Adobe user can be taken over". The report I wrote for the vendor's internal queue scored it higher than this page does. This page is the honest version.</p>
+
+      <h2 id="blocks"><span class="ch">Chapter 7</span>What I could not break</h2>
+
+      <p>An open registration endpoint invites the question <em>what else does it let you do</em>, and the answer here is: less than you would hope. Every row below is a thing I tried and could not make work, which is as much a part of the finding as the rows that did.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Attempt</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Non-loopback redirect (<code>https://example.com</code>, <code>https://adobe.com</code>)</td><td><code>invalid_redirect_uri</code></td></tr>
+            <tr><td>23 redirect bypass variants — traversal, IDN, hex IP, <code>127.1</code>, <code>0x7f000001</code>, <code>data:</code>, fragment, <code>nip.io</code>, URL-confusion forms</td><td>All rejected</td></tr>
+            <tr><td><code>client_credentials</code>, <code>implicit</code>, <code>password</code>, <code>token-exchange</code>, CIBA, device code</td><td>Grant type not permitted for DCR</td></tr>
+            <tr><td>Scopes <code>admin</code>, <code>employee</code>, <code>legacy</code></td><td><code>invalid_scope</code></td></tr>
+            <tr><td><code>token_endpoint_auth_method: private_key_jwt</code></td><td>Rejected</td></tr>
+            <tr><td>Authorize without <code>code_challenge</code> + <code>S256</code></td><td><code>invalid_request</code></td></tr>
+            <tr><td>Custom <code>client_name</code> to impersonate a known app</td><td>Overwritten with <code>client_id</code></td></tr>
+            <tr><td>Metadata URLs (<code>logo_uri</code>, <code>client_uri</code>, policy/ToS/contacts) as SSRF</td><td>Accepted by the parser, never fetched</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The two controls worth crediting are the ones that bound the damage. Enforcing loopback keeps the code out of an attacker's reach, and overwriting <code>client_name</code> keeps the consent card from being a convincing lie. Both are the right call, and both are the reason the score is 6.5 and not something in the nines.</p>
+
+      <p>What is missing sits one layer up. Nothing in that list asks <em>should this caller be allowed to register a client at all</em>, and nothing asks <em>should an arbitrary registered client be allowed to call the account-lookup API</em>. Those are the two questions this page is about.</p>
+
+      <h2 id="score"><span class="ch">Chapter 8</span>The honest score</h2>
+
+      <p><strong>CVSS 3.1 · 6.5 Medium</strong> — <code>AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N</code>.</p>
+
+      <p>The vector is chosen to be defensible rather than flattering. <code>PR:N</code> and <code>UI:N</code> are the honest part: the enumeration capability needs no account, no interaction, and no victim present — one POST, one endpoint, an answer about whether an address exists and how it authenticates. <code>AV:N</code> and <code>AC:L</code> need no argument.</p>
+
+      <p>The two <code>L</code>s are where I deliberately did not round in my own favour. <code>C:L</code> because the disclosure is account metadata — existence, type, state, MFA enrolment, method list — and not credentials, messages or content. <code>I:L</code> because the integrity impact is the issuance of a credential that a privileged internal API trusts; nothing was modified in a victim's account. <code>S:U</code> because both the vulnerable component (registry) and the impacted one (account lookup) sit inside the same identity authority. <code>A:N</code> because nothing here denies service to anyone.</p>
+
+      <p>The delta from my first pass is worth spelling out, because it is the whole point of publishing a number at all. My internal note scored this 8.6 with <code>S:C</code> and <code>C:H</code>, on the reasoning that a compromised Adobe ID reaches a hundred Experience Cloud products. That reasoning describes the value of the <em>asset</em>, not the impact of <em>this bug</em>. To reach a victim's account from here you need either their machine or an open redirect I could not find, and I did not demonstrate either. So the score dropped, the scope stayed unchanged, and this page says 6.5. If somebody finds the redirect, the same finding re-scores much higher — and that will be a different write-up with different evidence.</p>
+
+      <h2 id="fix"><span class="ch">Chapter 9</span>The fix</h2>
+
+      <p>The specification already offers the answer, and Adobe has already made the two harder decisions. Three changes close this, roughly in order of how much they buy:</p>
+
+      <ul>
+        <li><strong>Require an initial access token for <code>/ims/register</code>.</strong> RFC 7591 §3 exists for exactly this endpoint. An authenticated IMS session or a pre-issued software statement turns "anyone can mint a client" into "a developer can mint a client", which is what the developer console is for. This alone removes the unauthenticated half of the finding.</li>
+        <li><strong>Stop trusting arbitrary DCR clients at <code>auth.services.adobe.com</code>.</strong> The account-lookup endpoint should accept an allowlist of first-party, hand-provisioned client ids — not every id in the registry. A client created through dynamic registration has no business asking whether an address is an Adobe account. This removes the enumeration half, and it is the more important of the two, because it does not depend on the registration endpoint being fixed first.</li>
+        <li><strong>Keep the controls that already work, and audit the registry.</strong> The <code>client_name</code> override and the loopback-only redirect are good decisions; leave them alone. Then go through the existing registry for clients with unusual redirect URIs or unrecognised creation sources, because they have been creatable by anyone for as long as the endpoint has been open. RFC 7592 registration access tokens would make that registry manageable and revocable per client rather than by exception.</li>
+      </ul>
+
+      <p>None of this is exotic. It is two policy checks and an audit, in a service that already demonstrably knows how to make policy checks — it overrode my app name without being asked.</p>
+
+      <h2 id="receipts"><span class="ch">Receipts</span>What the claim rests on</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Artefact</th><th>What it establishes</th></tr></thead>
+          <tbody>
+            <tr><td>One <code>POST /ims/register</code> with no <code>Authorization</code> header</td><td><code>201</code> with a live <code>client_id</code> — no account, no console, no review</td></tr>
+            <tr><td>65+ registrations at ~0.6 s intervals</td><td>No registration throttle observed</td></tr>
+            <tr><td>Scope and grant matrix</td><td><code>offline_access</code> granted; machine grants and admin scopes refused</td></tr>
+            <tr><td><code>client_name</code> override</td><td>The name is server-set to the <code>client_id</code>, which is why the consent card cannot name the app</td></tr>
+            <tr><td>Redirect validator, 23 variants</td><td>Loopback-only is genuinely enforced, as a string comparison</td></tr>
+            <tr><td>Lookup endpoint, three controls</td><td>No header → <code>400</code>; fake id → <code>404</code>; DCR id → <code>200</code></td></tr>
+            <tr><td>Lookup rate limit</td><td>IP-based <code>429</code> after ~15 calls; fresh client ids do not reset it</td></tr>
+            <tr><td>Full flow on my own account</td><td>Consent → <code>302</code> to loopback → code captured → <code>200</code> from the token endpoint</td></tr>
+            <tr><td>Staging twin</td><td><code>ims-na1-stg1</code> + <code>auth-stg1</code> behave identically</td></tr>
+            <tr><td><a href="https://github.com/shoo0lin/adobe-ims-open-dcr">shoo0lin/adobe-ims-open-dcr</a></td><td>Five Ruby harnesses — register, authorize with PKCE, exchange, the single-address lookup gate, and the redirect matrix — plus the redacted fixtures</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The reproducers are public because nothing in them needs a secret: that is the entire finding. Run <code>register_client.rb</code> and you get your own client id; run <code>redirect_matrix.rb</code> and you get the rejected list; run the full flow against an account you own and you get a token. They do not contain an enumeration mode that walks a list, because the useful version of that is the abuse case rather than the evidence — <code>enum_gate.rb</code> takes one address you supply and shows the three response states side by side. If you want to prove the capability is real, one address is enough.</p>
+
+      <p>There is a shorter version of this post. It says: a consent screen asked a user to trust an application, and the only thing it could say about that application was a number nobody had ever approved.</p>
+
+      <p>OAuth's consent step is a delegation of trust, and it only works if the party being trusted was admitted by somebody. Adobe built a registration endpoint with no door on it, then taught the rest of the system to treat whatever came through as a client. The controls downstream — the name override, the loopback redirect, the PKCE requirement — are all good, and all of them are limits on what a <em>stranger</em> can do after being let in. None of them asks whether the stranger should be inside.</p>
+
+      <p>A registry is not an approval. A registry is a list of things that were allowed to happen.</p>
+
+      <hr>
+
+      <p style="color:var(--faint);font-size:14px">Tested against Adobe IMS production and staging with my own account only. Client identifiers are truncated, the authorization code and every token value are masked, and no account other than mine appears in these captures. The lookup response is shown as a shape with the identifier-bearing fields removed and no real address attached.</p>
+
+      <hr>
+      <p class="next"><a href="dispatcher-cache.html">Read: The Cache That Remembered a Stranger →</a></p>
+
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 shoo0lin · notes from the seam between server and browser</span>
+    <span><a href="../index.html">← All posts</a></span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('pre').forEach(function (pre) {
+  var btn = pre.querySelector('.copy');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var code = pre.querySelector('code');
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      btn.textContent = 'copied';
+      setTimeout(function () { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+});
+</script>
+</body>
+</html>

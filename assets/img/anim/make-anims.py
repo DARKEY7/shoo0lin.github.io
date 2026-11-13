@@ -362,9 +362,84 @@ def root():
     s.save("04-click-to-root.gif")
 
 
+# ------------------------------------------------------------------ 5. dcr
+def adobe():
+    s = Scene("open dcr", 5)
+    steps = [
+        ("1", "POST /ims/register", "no Authorization header"),
+        ("2", "201 Created", "a public client, instantly"),
+        ("3", "GET /ims/authorize/v2", "login, then a consent card"),
+        ("4", "302 \u2192 127.0.0.1:9999", "the code, delivered to loopback"),
+        ("5", "POST /ims/token/v3", "200 \u00b7 access + refresh + id"),
+    ]
+
+    rail = {
+        1: [("POST /ims/register", MID), ("", MID),
+            ("no Authorization", MID), ("header", MID)],
+        2: [("201 Created", RED), ("", MID),
+            ("client_id:", MID), ("82734d52\u2026", RED), ("", MID),
+            ("auth_method: none", MID)],
+        3: [("GET /ims/authorize/v2", MID), ("", MID),
+            ("\u2192 auth.services", MID), ("  .adobe.com", MID), ("", MID),
+            ("login, consent", MID)],
+        4: [("302 Found", MID), ("", MID),
+            ("http://127.0.0.1:", MID), ("9999/cb?code=\u2026", MID), ("", MID),
+            ("loopback only", RED)],
+        5: [("200 OK", RED), ("", MID),
+            ("token_type: bearer", MID), ("expires_in: 86399", MID), ("", MID),
+            ("access / refresh / id", MID)],
+    }
+
+    def paint(d, n, boundary):
+        y = 132
+        for i, (num, what, how) in enumerate(steps):
+            done = i < n
+            cur = i == n - 1
+            col = RED if cur else (INK if done else DIM)
+            d.rectangle([M, y + i * 74, M + 34, y + i * 74 + 34],
+                        outline=RED if (done or cur) else LINE, width=2 if cur else 1)
+            d.text((M + 17, y + i * 74 + 17), num, font=mono(16, True),
+                   fill=RED if (done or cur) else DIM, anchor="mm")
+            f = fit_sans(d, what, 18, 620)
+            d.text((M + 56, y + i * 74 + 3), what, font=f, fill=col)
+            f2 = fit(d, how, None, 14, 620)
+            d.text((M + 56, y + i * 74 + 30), how, font=f2, fill=RED if cur else DIM)
+
+        # right rail: what step n actually hands back
+        box = [846, 150, W - M, 430]
+        block(d, box, outline=RED if boundary else LINE, width=2 if boundary else 1)
+        d.text((box[0] + 18, box[1] + 14), "EXCHANGE", font=mono(12, True), fill=DIM)
+        ly = box[1] + 48
+        for text, col in rail[n]:
+            if text:
+                f = fit(d, text, None, 14, box[2] - box[0] - 34)
+                d.text((box[0] + 18, ly), text, font=f, fill=col)
+            ly += 26
+
+        # lower band: the boundary the whole chain stops at
+        d.line([M, 500, W - M, 500], fill=LINE)
+        if boundary:
+            d.text((M, 520), "the code lands on the victim's own loopback.",
+                   font=fit(d, "the code lands on the victim's own loopback.", None, 21, 1070),
+                   fill=INK)
+            d.text((M, 558), "same-machine interception, not a remote takeover \u2014 "
+                             "no cross-user ATO was demonstrated.",
+                   font=fit(d, "same-machine interception, not a remote takeover \u2014 "
+                               "no cross-user ATO was demonstrated.", None, 15, 1070),
+                   fill=RED)
+
+    seq = [(1, False, 420), (2, False, 420), (2, False, 200), (3, False, 520),
+           (4, False, 520), (5, False, 420), (5, True, 1600)]
+    for n, b, ms in seq:
+        s.frame(lambda d, n=n, b=b: paint(d, n, b), ms)
+        s.durations.append(ms)
+    s.save("05-open-dcr.gif")
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     netflix()
     aem()
     wp()
     root()
+    adobe()
