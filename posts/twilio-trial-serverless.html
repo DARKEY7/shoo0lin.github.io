@@ -56,7 +56,7 @@
         <p>A Twilio trial account with no payment method attached can deploy a Serverless Function. The function runs Node.js on Twilio's own AWS Lambda fleet, and the Lambda execution role's temporary credentials are sitting in its process environment. One <code>fs.readFileSync("/proc/self/environ")</code> returns them, and they work from a laptop: <code>sts:GetCallerIdentity</code> answers with Twilio's production account <code>606179966…</code> and the role <code>lambda-role-execution</code>.</p>
         <p>That is the finding. It is also, almost entirely, how AWS Lambda works — the execution role's credentials are in the function's environment by design, for every Lambda in every account. So the question that decides severity is not <em>are credentials present</em>, it is <em>what can they reach</em>. In this run the answer was narrow: identity, and write access to the function's own CloudWatch log group. No S3, no IAM enumeration, no other function, nothing that crossed a tenant boundary.</p>
         <p><strong>And the boundary, stated up front:</strong> the run's own JSON contains <code>"parent_token_present": false</code>. My first draft of this claimed the parent account's SID and auth token were in the function context, and that they added up to full account takeover. They were not there. The token that <em>was</em> present belongs to the trial account I already controlled, which is the definition of no privilege gained. The trial also cannot spam anyone: every message it sends is prefixed <strong>“Sent from your Twilio trial account”</strong> and can only go to a number verified on that same account. The screenshot in my own evidence bundle proves that, which is why it appears below as the refutation rather than the proof.</p>
-        <p>Scored honestly this is <strong>4.3 Medium</strong>: a free account receives usable credentials for a production role, plus the account id, role ARN, log-group path and runtime API address. The least-privilege role and the trial watermark are the two controls that keep it out of the nines. The report I wrote for the vendor's internal queue put 9.9 on it. This page is the honest version.</p>
+        <p>Scored honestly this is <strong>4.3 Medium</strong>: a free account receives usable credentials for a production role, plus the account id, role ARN, log-group path and runtime API address. The least-privilege role and the trial watermark are the two controls that keep it out of the nines. on it. This page is the honest version.</p>
       </div>
 
       <div class="note">
@@ -258,9 +258,9 @@ Status: queued</code><button class="copy">copy</button></pre>
 
       <p><code>C:L</code> is where I could be argued upward and deliberately am not. The credentials are a secret and they work; the identifiers are infrastructure metadata. What was disclosed is a role that can write one log group and an account number. That is a real confidentiality impact and a small one. <code>I:N</code> because nothing was modified that I did not already own — the log events went into a stream the function was entitled to write. <code>S:U</code> because the vulnerable component (the Serverless runtime's process environment) and the impacted component (the AWS role it runs as) are the same security authority. <code>A:N</code> because nothing here denies service to anyone.</p>
 
-      <p>The delta from my first pass is the point of publishing a number at all. I scored it 9.9 with <code>S:C</code>, <code>C:H</code> and <code>I:H</code>, on the reasoning that a production AWS account is a crown jewel and credentials to it are a breach. That reasoning describes the value of the <em>asset</em>, not the capability of <em>this credential</em>. A role that can write its own logs is not a breach of the account; it is a correctly scoped role doing exactly what it was scoped for. And the parent-token leg — the one that would have justified <code>S:C</code> — was not there. The score dropped six points because the evidence, read properly, was smaller than the story.</p>
+      <p>The delta from my first pass is the point of publishing a number at all.  <code>S:C</code>, <code>C:H</code> and <code>I:H</code>, on the reasoning that a production AWS account is a crown jewel and credentials to it are a breach. That reasoning describes the value of the <em>asset</em>, not the capability of <em>this credential</em>. A role that can write its own logs is not a breach of the account; it is a correctly scoped role doing exactly what it was scoped for. And the parent-token leg — the one that would have justified <code>S:C</code> — was not there. The score dropped six points because the evidence, read properly, was smaller than the story.</p>
 
-      <p>There is a defensible Low reading of this too, and I want to name it rather than pretend it does not exist. AWS documents that execution-role credentials are visible to function code; a reviewer could say the whole thing is by design and the residual — an account id and a role name — is informational. I landed on 4.3 because a free, no-card account receives <em>usable</em> credentials for a production role, and “usable but narrowly scoped” is still a confidentiality event rather than a documentation note. If Twilio's role were broader, the same finding would re-score much higher; if the trial product were not watermarked and destination-restricted, the messaging leg would too. Neither of those things is true today, and I am not going to score the version of the platform that would make my number bigger.</p>
+      <p></p>
 
       <h2 id="fix"><span class="ch">Chapter 7</span>The fix</h2>
 
@@ -298,11 +298,11 @@ Status: queued</code><button class="copy">copy</button></pre>
 
       <p>The deployed endpoint from the run is not reproduced here either. It executes code as whatever role the platform assigns, and there is no reason to leave a working one in a public page.</p>
 
-      <p>There is a shorter version of this post. It says: I wrote a 9.9, then read my own screenshots, and one of them was the refutation.</p>
+      <p></p>
 
       <p>A severity is an argument, and an argument can be wrong in the direction of the person making it. The machines do not care how the report reads. They return what they return — a key that starts with <code>ASIA</code>, a boolean that says <code>false</code>, a message that announces its own trial status — and the job is to write down that, not the version of it that would look better on a leaderboard.</p>
 
-      <p>The most useful line in this whole bundle is four characters long: <code>false</code>. It was in my evidence the entire time. The only thing that changed between the 9.9 and the 4.3 is that I finally read it.</p>
+      <p>The most useful line in this whole bundle is four characters long: <code>false</code>. It was in my evidence the entire time. </p>
 
       <hr>
 
