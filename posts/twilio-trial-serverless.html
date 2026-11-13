@@ -153,7 +153,7 @@ callback(null, {
 
       <pre><code>$ aws sts get-caller-identity --profile twilio-leak
 {
-  "UserId":  "AROAY2IZEHUX66TGRZI3L:ZBe35605a7…",
+  "UserId":  "AROAY2IZEHUX…:ZBe35605a7…",
   "Account": "606179966…",
   "Arn":     "arn:aws:sts::606179966…:assumed-role/lambda-role-execution/ZBe35605a7…"
 }</code><button class="copy">copy</button></pre>
@@ -163,10 +163,10 @@ callback(null, {
       <p>So I tried the one write that a Lambda role almost always has, because the Lambda service writes your logs whether you ask it to or not: CloudWatch.</p>
 
       <pre><code>$ aws logs create-log-stream \
-    --log-group-name "/aws/lambda/ZBe35605a7…" \
+    --log-group-name "/aws/lambda/ZBeaf0U42…" \
     --log-stream-name "bb-repro-pwn" --region us-east-1 --profile twilio-leak
 $ aws logs put-log-events \
-    --log-group-name "/aws/lambda/ZBe35605a7…" \
+    --log-group-name "/aws/lambda/ZBeaf0U42…" \
     --log-stream-name "bb-repro-pwn" \
     --log-events '[{"timestamp": 1748…, "message": "…used externally…"}]' \
     --region us-east-1 --profile twilio-leak
@@ -187,7 +187,7 @@ $ aws logs put-log-events \
 
 $ curl "…/AvailablePhoneNumbers/US/Local.json?AreaCode=415"
 +1415471… | San Francisco
-+14152237476 | San Rafael
++1415223… | San Rafael
 
 $ curl -X POST "…/IncomingPhoneNumbers.json" \
     --data-urlencode "PhoneNumber=+1415471…"
@@ -287,14 +287,14 @@ Status: queued</code><button class="copy">copy</button></pre>
             <tr><td><code>sts:GetCallerIdentity</code> from a laptop</td><td>Credentials are valid off-host; account <code>606179966…</code>, role <code>lambda-role-execution</code></td></tr>
             <tr><td><code>put-log-events</code> → <code>nextSequenceToken</code></td><td>One write allowed, scoped to the function's own log group</td></tr>
             <tr><td>Number purchase <code>PNf07db6da…</code></td><td>One number bought with the account's own $15.50 promotional credit</td></tr>
-            <tr><td>SMS <code>SM3913456e9…</code> → <code>queued</code>, then received</td><td>Delivery works, to a number verified on the same account</td></tr>
+            <tr><td>SMS <code>SM3913456e…</code> → <code>queued</code>, then received</td><td>Delivery works, to a number verified on the same account</td></tr>
             <tr><td>The received bubble, watermarked</td><td>“Sent from your Twilio trial account” — the spam and phishing leg is refuted by the capture</td></tr>
             <tr><td><a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a></td><td>The function, the deploy and fetch scripts, the three-way session-token control, the redactor with its self-test, and the masked transcripts</td></tr>
           </tbody>
         </table>
       </div>
 
-      <p>The harness behind this piece is public: <a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a>. It holds the function that reads its own environment, the deploy and fetch scripts, the three-way session-token control, and a redactor with a self-test — every value in <code>evidence/</code> is masked to the policy that script implements, so the masking is something you can run rather than an edit you have to trust. What it does not hold is the raw bundle: that is a screen recording and a set of images with live credentials, full SIDs, a phone number and a handset screen in them. The repository runs against an account you own; nothing in it reaches a third party's tenant.</p>
+      <p>The harness behind this piece is public: <a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a>. It holds the function that reads its own environment, the deploy and fetch scripts, the three-way session-token control, and a redactor with two commands worth running — <code>--self-test</code> checks the masking policy itself, and <code>--check</code> re-runs the policy over every published file in <code>evidence/</code> and fails if anything would change. Every value here is a fixed point of that policy, so the masking is something you can run rather than an edit you have to trust. What it does not hold is the raw bundle: that is a screen recording and a set of images with live credentials, full SIDs, a phone number and a handset screen in them. The repository runs against an account you own; nothing in it reaches a third party's tenant.</p>
 
       <p>The deployed endpoint from the run is not reproduced here either. It executes code as whatever role the platform assigns, and there is no reason to leave a working one in a public page.</p>
 
