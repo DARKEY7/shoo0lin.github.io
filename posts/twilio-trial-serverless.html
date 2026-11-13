@@ -289,13 +289,14 @@ Status: queued</code><button class="copy">copy</button></pre>
             <tr><td>Number purchase <code>PNf07db6da…</code></td><td>One number bought with the account's own $15.50 promotional credit</td></tr>
             <tr><td>SMS <code>SM3913456e9…</code> → <code>queued</code>, then received</td><td>Delivery works, to a number verified on the same account</td></tr>
             <tr><td>The received bubble, watermarked</td><td>“Sent from your Twilio trial account” — the spam and phishing leg is refuted by the capture</td></tr>
+            <tr><td><a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a></td><td>The function, the deploy and fetch scripts, the three-way session-token control, the redactor with its self-test, and the masked transcripts</td></tr>
           </tbody>
         </table>
       </div>
 
-      <p>There is no reproducer repository for this one, and that is a deliberate choice rather than an oversight. The harness that matters is a function that reads its own environment and a CLI call that uses the result; publishing it would ship a working recipe for extracting a credential from any Serverless tenant, and the finding does not need it — the response above is the whole proof. What cannot be published safely is also what cannot be usefully replicated by a reader who does not already control the account.</p>
+      <p>The harness behind this piece is public: <a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a>. It holds the function that reads its own environment, the deploy and fetch scripts, the three-way session-token control, and a redactor with a self-test — the masked transcripts in <code>evidence/</code> were produced by running it, not by editing a screenshot by hand. What it does not hold is the raw bundle: that is a screen recording and a set of images with live credentials, full SIDs, a phone number and a handset screen in them. The repository runs against an account you own; nothing in it reaches a third party's tenant.</p>
 
-      <p>The endpoint from the run is not reproduced here either. It executes code as whatever role the platform assigns, and there is no reason to leave a working one in a public page.</p>
+      <p>The deployed endpoint from the run is not reproduced here either. It executes code as whatever role the platform assigns, and there is no reason to leave a working one in a public page.</p>
 
       <p>There is a shorter version of this post. It says: I wrote a 9.9, then read my own screenshots, and one of them was the refutation.</p>
 

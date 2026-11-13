@@ -75,6 +75,10 @@ The harnesses behind the posts live in separate repositories:
   listener, the code-for-token exchange, the single-address lookup gate showing all three response
   states, and the 23-variant redirect matrix. No bulk enumeration mode; the flow runs against an
   account you own.
+- **[shoo0lin/twilio-serverless-role-creds](https://github.com/shoo0lin/twilio-serverless-role-creds)** —
+  the function that reads its own `/proc/self/environ`, the deploy and fetch scripts, the three-way
+  session-token control, and the redactor with its self-test. Deploys only to an account you own;
+  the raw bundle with the live credentials and SIDs is not published.
 
 ---
 
