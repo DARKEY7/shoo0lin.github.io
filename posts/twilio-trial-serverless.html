@@ -294,7 +294,7 @@ Status: queued</code><button class="copy">copy</button></pre>
         </table>
       </div>
 
-      <p>The harness behind this piece is public: <a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a>. It holds the function that reads its own environment, the deploy and fetch scripts, the three-way session-token control, and a redactor with a self-test — the masked transcripts in <code>evidence/</code> were produced by running it, not by editing a screenshot by hand. What it does not hold is the raw bundle: that is a screen recording and a set of images with live credentials, full SIDs, a phone number and a handset screen in them. The repository runs against an account you own; nothing in it reaches a third party's tenant.</p>
+      <p>The harness behind this piece is public: <a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a>. It holds the function that reads its own environment, the deploy and fetch scripts, the three-way session-token control, and a redactor with a self-test — every value in <code>evidence/</code> is masked to the policy that script implements, so the masking is something you can run rather than an edit you have to trust. What it does not hold is the raw bundle: that is a screen recording and a set of images with live credentials, full SIDs, a phone number and a handset screen in them. The repository runs against an account you own; nothing in it reaches a third party's tenant.</p>
 
       <p>The deployed endpoint from the run is not reproduced here either. It executes code as whatever role the platform assigns, and there is no reason to leave a working one in a public page.</p>
 
