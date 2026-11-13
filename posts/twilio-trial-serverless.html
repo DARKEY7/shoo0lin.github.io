@@ -43,7 +43,7 @@
         <span>13 Nov 2026</span>
         <span>13 min read</span>
         <span>CVSS 3.1 · 4.3 Medium</span>
-        <span>1 diagram · 1 capture · 9 checks</span>
+        <span>1 diagram · 1 capture</span>
       </div>
     </div>
   </section>
@@ -73,7 +73,6 @@
           <li><a href="#offhost">Using the credential from a laptop</a></li>
           <li><a href="#message">The number, and the message</a></li>
           <li><a href="#survived">What actually survived</a></li>
-          <li><a href="#blocks">What I could not break</a></li>
           <li><a href="#score">The honest score</a></li>
           <li><a href="#fix">The fix</a></li>
           <li><a href="#receipts">Receipts</a></li>
@@ -260,30 +259,7 @@ Status: queued</code><button class="copy">copy</button></pre>
 
       <p>That is a confidentiality finding with an infrastructure-metadata component. It is not account takeover, it is not financial loss, it is not spam, and it is not a cross-tenant read. The two things that make it small are the ones Twilio did right: the execution role is scoped to logging, and the trial product is watermarked and destination-restricted.</p>
 
-      <h2 id="blocks"><span class="ch">Chapter 6</span>What I could not break</h2>
-
-      <p>Every row here is an escalation I tried or checked, and could not make work. They are as much a part of the finding as the rows that did.</p>
-
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Attempt</th><th>Result</th></tr></thead>
-          <tbody>
-            <tr><td>Read a parent account's SID or token from <code>context</code></td><td><code>parent_token_present: false</code> — absent on this runtime</td></tr>
-            <tr><td>Reach another tenant's function, logs or invocation events</td><td>No evidence; the runtime API served this function's own events only</td></tr>
-            <tr><td>Broaden the role beyond logging (IAM, S3, other log groups)</td><td>Not demonstrated — the two allowed calls were identity and its own log stream</td></tr>
-            <tr><td>Use the AWS token against the Twilio API</td><td>Not attempted; different trust domain, no reason to believe it maps</td></tr>
-            <tr><td>Send a trial message to an unverified third party</td><td>Trial accounts are destination-restricted to verified numbers</td></tr>
-            <tr><td>Send a message without the trial prefix</td><td>The prefix is added by Twilio, not by the caller</td></tr>
-            <tr><td>Convert trial credit into a loss for Twilio</td><td>The credit is promotional, spent at list price on Twilio's own product</td></tr>
-            <tr><td>Keep access after the function is deleted</td><td>API keys belong to the account, not the function — and the account is the attacker's own</td></tr>
-            <tr><td>Premium-product access without a request</td><td>Unverified; excluded from the finding rather than assumed</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p>The pattern in that table is the pattern in most inflated reports. Every row that failed is a boundary someone else built — least-privilege roles, destination restrictions, a watermark, the difference between an account's own token and its parent's. None of those are accidents. They are the reason this page is 4.3 and not 9.9.</p>
-
-      <h2 id="score"><span class="ch">Chapter 7</span>The honest score</h2>
+      <h2 id="score"><span class="ch">Chapter 6</span>The honest score</h2>
 
       <p><strong>CVSS 3.1 · 4.3 Medium</strong> — <code>AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N</code>.</p>
 
@@ -295,7 +271,7 @@ Status: queued</code><button class="copy">copy</button></pre>
 
       <p>There is a defensible Low reading of this too, and I want to name it rather than pretend it does not exist. AWS documents that execution-role credentials are visible to function code; a reviewer could say the whole thing is by design and the residual — an account id and a role name — is informational. I landed on 4.3 because a free, no-card account receives <em>usable</em> credentials for a production role, and “usable but narrowly scoped” is still a confidentiality event rather than a documentation note. If Twilio's role were broader, the same finding would re-score much higher; if the trial product were not watermarked and destination-restricted, the messaging leg would too. Neither of those things is true today, and I am not going to score the version of the platform that would make my number bigger.</p>
 
-      <h2 id="fix"><span class="ch">Chapter 8</span>The fix</h2>
+      <h2 id="fix"><span class="ch">Chapter 7</span>The fix</h2>
 
       <p>Most of this is already fixed by design, so the recommendations are small and specific. In order of how much they buy:</p>
 
@@ -322,7 +298,6 @@ Status: queued</code><button class="copy">copy</button></pre>
             <tr><td>Number purchase <code>PNf07db6da…</code></td><td>One number bought with the account's own $15.50 promotional credit</td></tr>
             <tr><td>SMS <code>SM3913456e9…</code> → <code>queued</code>, then received</td><td>Delivery works, to a number verified on the same account</td></tr>
             <tr><td>The received bubble, watermarked</td><td>“Sent from your Twilio trial account” — the spam and phishing leg is refuted by the capture</td></tr>
-            <tr><td>Nine-check escalation table</td><td>No cross-tenant read, no role broadening, no third-party destination, no parent credential</td></tr>
           </tbody>
         </table>
       </div>
