@@ -43,7 +43,7 @@
         <span>13 Nov 2026</span>
         <span>12 min read</span>
         <span>CVSS 3.1 · 4.3 Medium</span>
-        <span>1 diagram · 1 capture</span>
+        <span>1 diagram · 8 captures</span>
       </div>
     </div>
   </section>
@@ -53,15 +53,15 @@
 
       <div class="tldr" id="tldr">
         <h2>TL;DR</h2>
-        <p>A Twilio trial account with no payment method attached can deploy a Serverless Function. The function runs Node.js on Twilio's own AWS Lambda fleet, and the Lambda execution role's temporary credentials are sitting in its process environment. One <code>fs.readFileSync("/proc/self/environ")</code> returns them, and they work from a laptop: <code>sts:GetCallerIdentity</code> answers with Twilio's production account <code>606179966…</code> and the role <code>lambda-role-execution</code>.</p>
+        <p>A Twilio trial account with no payment method attached can deploy a Serverless Function. The function runs Node.js on Twilio's own AWS Lambda fleet, and the Lambda execution role's temporary credentials are sitting in its process environment. One <code>fs.readFileSync("/proc/self/environ")</code> returns them, and they work from a laptop: <code>sts:GetCallerIdentity</code> answers with Twilio's production account <code>606…</code> and the role <code>lambda-role-execution</code>.</p>
         <p>That is the finding. It is also, almost entirely, how AWS Lambda works — the execution role's credentials are in the function's environment by design, for every Lambda in every account. So the question that decides severity is not <em>are credentials present</em>, it is <em>what can they reach</em>. In this run the answer was narrow: identity, and write access to the function's own CloudWatch log group. No S3, no IAM enumeration, no other function, nothing that crossed a tenant boundary.</p>
         <p><strong>And the boundary, stated up front:</strong> the run's own JSON contains <code>"parent_token_present": false</code>. My first draft of this claimed the parent account's SID and auth token were in the function context, and that they added up to full account takeover. They were not there. The token that <em>was</em> present belongs to the trial account I already controlled, which is the definition of no privilege gained. The trial also cannot spam anyone: every message it sends is prefixed <strong>“Sent from your Twilio trial account”</strong> and can only go to a number verified on that same account. The screenshot in my own evidence bundle proves that, which is why it appears below as the refutation rather than the proof.</p>
-        <p>Scored honestly this is <strong>4.3 Medium</strong>: a free account receives usable credentials for a production role, plus the account id, role ARN, log-group path and runtime API address. The least-privilege role and the trial watermark are the two controls that keep it out of the nines. on it. This page is the honest version.</p>
+        <p>Scored honestly this is <strong>4.3 Medium</strong>: a free account receives usable credentials for a production role, plus the account id, role ARN, log-group path and runtime API address. The least-privilege role and the trial watermark are the two controls that keep it out of the nines. This page is the honest version.</p>
       </div>
 
       <div class="note">
         <b>On the values in this page</b>
-        The account, the function and the handset are mine. Account SIDs, service and environment SIDs, the function id, the AWS access key and session token, the AWS account id, the message SID, both phone numbers, and the log-group path are masked or truncated. Terminal output is reproduced as text with the values substituted, not screenshotted: a still of that window would print a live session token, and scrolling text leaves no static region to blank out. The one real capture is the received message, cropped to the bubble — the number, the carrier, the clock and the two verification codes that sat above it are out of frame. No other user, account or number appears anywhere in this write-up.
+        The account, the function and the handset are mine. The terminal captures are real: each is cropped from the run's own screenshots and covered with a solid bar over every value the redaction policy strips. The values under a bar are the AWS access key, secret and session token, the function id and log-group path, the account, service and environment SIDs, the AWS account id, the purchased number's SID, the message SID and both phone numbers. Left readable on purpose: the <code>ASIA</code> key prefix, the <code>lambda-role-execution</code> role name, the <code>twil.io</code> domain, the region, the log stream name and the <code>parent_token_present</code> boolean — those are the parts that carry the argument, and none of them is a secret. Every capture sits next to a transcription of the same text, and the wide ones run past the text column so you can pan them. The one non-terminal capture is the received message, cropped to the bubble — the number, the carrier, the clock and the two verification codes that sat above it are out of frame. No other user, account or number appears anywhere in this write-up.
       </div>
 
       <nav class="toc" aria-label="Contents">
@@ -87,13 +87,20 @@
 
       <p class="dropcap">Twilio's Serverless product lets you upload JavaScript functions and get a public HTTPS endpoint per function. The account here was a trial: no card, no upgrade, an email address and a phone number verified, and a $15.50 promotional balance. That is the entire bar. The CLI did the rest.</p>
 
-      <pre><code>twilio serverless:deploy --service-sid "ZS7e106d…" --force
+      <pre><code>twilio serverless:deploy --service-sid "ZS…" --force
 
 # Serverless project successfully deployed
-# serviceSid     ZS7e106d…
-# environmentSid ZE2486da…
+# serviceSid     ZS…
+# environmentSid ZE…
 # runtime        node22
 # public /proof  https://rce-build-test-2034-dev.twil.io/proof</code><button class="copy">copy</button></pre>
+
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/03-deploy.png" alt="Terminal capture of a Twilio Serverless deploy: the project-built and deployed lines, a service SID, an environment SID, the runtime version, and the public /proof URL under a twil.io domain. The service and environment SID values are covered by solid bars." width="2120" height="555">
+        </div>
+        <figcaption><b>Field capture, cropped and redacted.</b> The trial account's first deploy. The service and environment SIDs are covered by bars; the <code>twil.io</code> domain and the <code>/proof</code> path stay visible because they are the product, not a secret. The block above is a transcription of the same output.</figcaption>
+      </figure>
 
       <p>There is nothing hidden in that. It is the product working as documented: a trial account gets a development environment, a domain under <code>twil.io</code>, and a function it can invoke over the internet. The questions that matter start one layer down, in the process the function is handed.</p>
 
@@ -122,22 +129,36 @@ callback(null, {
   domain:                context.DOMAIN_NAME
 });</code><button class="copy">copy</button></pre>
 
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/02-function.png" alt="Editor capture of the twelve-line Node.js function: it reads /proc/self/environ, splits on NUL, and returns the AWS key, secret, session token, region, function name, log group, and the context booleans and SIDs." width="1620" height="720">
+        </div>
+        <figcaption><b>Field capture, cropped.</b> The whole function. It holds no secrets — it is the code that <em>reads</em> them — so nothing here needed a bar. The block above is the same text.</figcaption>
+      </figure>
+
       <p>And the response, with the values masked and the one boolean left exactly as it came back:</p>
 
       <pre><code>{
-  "aws_access_key_id":     "ASIAY2IZEHUX…",
+  "aws_access_key_id":     "ASIA…",
   "aws_secret_access_key": "masked",
   "aws_session_token":     "present (1100 chars)",
   "aws_region":            "us-east-1",
-  "aws_function_name":     "ZBeaf0U42…",
-  "aws_log_group":         "/aws/lambda/ZBeaf0U42…",
+  "aws_function_name":     "ZB…",
+  "aws_log_group":         "/aws/lambda/ZB…",
   "parent_token_present":  false,
   "auth_token_present":    true,
-  "account_sid":           "ACda1b0c…",
-  "service_sid":           "ZS7e106d…",
-  "environment_sid":       "ZE2486da…",
+  "account_sid":           "AC…",
+  "service_sid":           "ZS…",
+  "environment_sid":       "ZE…",
   "domain":                "rce-build-test-2034-dev.twil.io"
 }</code><button class="copy">copy</button></pre>
+
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/04-environ-json.png" alt="Capture of the function's JSON response: AWS key, secret and session token, region us-east-1, function name, log-group path, the boolean parent_token_present set to false, auth_token_present set to true, account, service and environment SIDs, and the twil.io domain. The key, secret, function name, log group and SIDs are covered by solid bars." width="2260" height="395">
+        </div>
+        <figcaption><b>Field capture, cropped and redacted.</b> The response as it came back, with the credential fields and the infrastructure identifiers covered. <code>parent_token_present: false</code> and <code>aws_region: us-east-1</code> stay readable — the first is the finding's own boundary, the second is not a secret. The block above is the same object.</figcaption>
+      </figure>
 
       <p>Three things in that object are worth naming.</p>
 
@@ -153,25 +174,39 @@ callback(null, {
 
       <pre><code>$ aws sts get-caller-identity --profile twilio-leak
 {
-  "UserId":  "AROAY2IZEHUX…:ZBe35605a7…",
-  "Account": "606179966…",
-  "Arn":     "arn:aws:sts::606179966…:assumed-role/lambda-role-execution/ZBe35605a7…"
+  "UserId":  "AROA…:ZB…",
+  "Account": "606…",
+  "Arn":     "arn:aws:sts::606…:assumed-role/lambda-role-execution/ZB…"
 }</code><button class="copy">copy</button></pre>
+
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/05-sts.png" alt="Terminal capture of aws sts get-caller-identity run from a laptop: a UserId ARN, an Account number, and an Arn ending in assumed-role/lambda-role-execution. The account number and the session identifier tail are covered by bars; the arn:aws:sts:: prefix and the role name stay visible." width="1520" height="260">
+        </div>
+        <figcaption><b>Field capture, cropped and redacted.</b> The credential used off-host. The account number and the session identifier are covered; <code>arn:aws:sts::</code> and the role name <code>lambda-role-execution</code> stay visible, because the role name is the part that says how far the credential reaches. Transcribed above.</figcaption>
+      </figure>
 
       <p>That is a real answer, from a different network, about an account I do not own. <code>sts:GetCallerIdentity</code> is allowed to every principal in AWS, including anonymous error paths, so it proves the credential is valid and proves nothing about permission. The account id is Twilio's production account and the role is the one its functions run as. The metadata is the finding; the permission was still unknown.</p>
 
       <p>So I tried the one write that a Lambda role almost always has, because the Lambda service writes your logs whether you ask it to or not: CloudWatch.</p>
 
       <pre><code>$ aws logs create-log-stream \
-    --log-group-name "/aws/lambda/ZBeaf0U42…" \
+    --log-group-name "/aws/lambda/ZB…" \
     --log-stream-name "bb-repro-pwn" --region us-east-1 --profile twilio-leak
 $ aws logs put-log-events \
-    --log-group-name "/aws/lambda/ZBeaf0U42…" \
+    --log-group-name "/aws/lambda/ZB…" \
     --log-stream-name "bb-repro-pwn" \
     --log-events '[{"timestamp": 1748…, "message": "…used externally…"}]' \
     --region us-east-1 --profile twilio-leak
 
-{ "nextSequenceToken": "496703824176290625488423465073…" }</code><button class="copy">copy</button></pre>
+{ "nextSequenceToken": "4967…" }</code><button class="copy">copy</button></pre>
+
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/06-cloudwatch.png" alt="Terminal capture of the CloudWatch write: create-log-stream and put-log-events against the function's own log group, and a returned nextSequenceToken. The log-group name and the token are covered by solid bars; the stream name bb-repro-pwn stays visible." width="2560" height="410">
+        </div>
+        <figcaption><b>Field capture, cropped and redacted.</b> The one write. The log-group path and the sequence token are covered; the stream name is mine and stays. A returned sequence token is the server saying the events were accepted. Transcribed above.</figcaption>
+      </figure>
 
       <p>The write succeeded — a sequence token means the events were accepted — and it succeeded against the function's <em>own</em> log group, which is exactly the scope the Lambda logging policy grants. This is the part I want to be precise about, because it is where a critical rating lives or dies. A role that can write its own logs is a role that has been scoped correctly. The credential is real, the identity is real, and the blast radius is a log stream that the function was already allowed to fill.</p>
 
@@ -183,37 +218,51 @@ $ aws logs put-log-events \
 
       <p>Buying a number on a trial account is the documented trial capability. You get a small promotional balance precisely so you can rent one number and try the messaging API against numbers you have verified. The first attempt was a fixed number that turned out to be taken:</p>
 
-      <pre><code>+1415965… is not available.
+      <pre><code>+1415… is not available.
 
 $ curl "…/AvailablePhoneNumbers/US/Local.json?AreaCode=415"
-+1415471… | San Francisco
-+1415223… | San Rafael
++1415… | San Francisco
++1415… | San Rafael
 
 $ curl -X POST "…/IncomingPhoneNumbers.json" \
-    --data-urlencode "PhoneNumber=+1415471…"
+    --data-urlencode "PhoneNumber=+1415…"
 
-BOUGHT: PNf07db6da… | Number: +1415471…</code><button class="copy">copy</button></pre>
+BOUGHT: PN… | Number: +1415…</code><button class="copy">copy</button></pre>
+
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/07-number.png" alt="Terminal capture of the number purchase: an unavailable-number line, a search of local 415 numbers returning two candidates, a POST to IncomingPhoneNumbers.json, and a BOUGHT line. Every phone number and the purchased number's SID are covered by solid bars; the city labels stay visible." width="2200" height="665">
+        </div>
+        <figcaption><b>Field capture, cropped and redacted.</b> Buying one number with the trial's promotional credit. Every phone number and the number's SID are covered; the city labels stay so the search stays legible. Transcribed above.</figcaption>
+      </figure>
 
       <p>That consumed part of a $15.50 balance I had been given for exactly this purpose. There is no victim in that transaction and no loss to Twilio; the money is the company's own promotional credit being spent on the company's own product, at list price. “Financial abuse” describes someone else's money. This was mine.</p>
 
       <p>Then the send:</p>
 
       <pre><code>$ curl -X POST "…/Messages.json" \
-    --data-urlencode "From=+1415471…" \
-    --data-urlencode "To=+9198318…" \
+    --data-urlencode "From=+1415…" \
+    --data-urlencode "To=+91…" \
     --data-urlencode "Body=BB-REPRO: This SMS was sent from Twilio
       infrastructure using creds extracted from a Serverless Function
       deployed by a Trial account. Reproduce confirmed."
 
-SMS SENT! SID: SM3913456e…
-From: +1415471…
-To:   +9198318…
+SMS SENT! SID: SM…
+From: +1415…
+To:   +91…
 Status: queued</code><button class="copy">copy</button></pre>
+
+      <figure class="figure-wide">
+        <div class="pan">
+          <img src="../assets/img/twilio/08-sms-send.png" alt="Terminal capture of the SMS send: a curl POST to Messages.json with From and To fields and the message body, then SMS SENT with a message SID, the from and to numbers, and Status queued. The account credential, both numbers, the message SID and the From/To result lines are covered by bars; the body text and Status queued stay visible." width="2560" height="545">
+        </div>
+        <figcaption><b>Field capture, cropped and redacted.</b> The send. Both phone numbers, the message SID and the API credential are covered; the message body and <code>Status: queued</code> stay visible, since the body is the point and <code>queued</code> is why the next capture matters. Transcribed above.</figcaption>
+      </figure>
 
       <p><code>queued</code> is not <code>delivered</code>, so I waited for the handset. This is the message that arrived, cropped to the bubble:</p>
 
       <figure>
-        <img src="../assets/img/twilio/01-trial-sms.png" alt="Capture of a received SMS bubble reading: Sent from your Twilio trial account - BB-REPRO: This SMS was sent from Twilio infrastructure using creds extracted from a Serverless Function deployed by a Trial account. Reproduce confirmed." width="1440" height="900">
+        <img src="../assets/img/twilio/01-trial-sms.png" alt="Capture of a received SMS bubble reading: Sent from your Twilio trial account - BB-REPRO: This SMS was sent from Twilio infrastructure using creds extracted from a Serverless Function deployed by a Trial account. Reproduce confirmed." width="1005" height="520">
         <figcaption><b>Field capture, cropped.</b> The message the API queued, on the handset it was sent to. The first line is Twilio's, not mine, and it is the whole reason this leg of the report is not a spam finding: every trial message carries it, and every trial message can only be sent to a number verified on the same account. The number, the clock and the two verification codes above this bubble are cropped out.</figcaption>
       </figure>
 
@@ -258,9 +307,7 @@ Status: queued</code><button class="copy">copy</button></pre>
 
       <p><code>C:L</code> is where I could be argued upward and deliberately am not. The credentials are a secret and they work; the identifiers are infrastructure metadata. What was disclosed is a role that can write one log group and an account number. That is a real confidentiality impact and a small one. <code>I:N</code> because nothing was modified that I did not already own — the log events went into a stream the function was entitled to write. <code>S:U</code> because the vulnerable component (the Serverless runtime's process environment) and the impacted component (the AWS role it runs as) are the same security authority. <code>A:N</code> because nothing here denies service to anyone.</p>
 
-      <p>The delta from my first pass is the point of publishing a number at all.  <code>S:C</code>, <code>C:H</code> and <code>I:H</code>, on the reasoning that a production AWS account is a crown jewel and credentials to it are a breach. That reasoning describes the value of the <em>asset</em>, not the capability of <em>this credential</em>. A role that can write its own logs is not a breach of the account; it is a correctly scoped role doing exactly what it was scoped for. And the parent-token leg — the one that would have justified <code>S:C</code> — was not there. The score dropped six points because the evidence, read properly, was smaller than the story.</p>
-
-      <p></p>
+      <p>The delta from my first pass is the point of publishing a number at all. My first pass scored <code>S:C</code>, <code>C:H</code> and <code>I:H</code>, on the reasoning that a production AWS account is a crown jewel and credentials to it are a breach. That reasoning describes the value of the <em>asset</em>, not the capability of <em>this credential</em>. A role that can write its own logs is not a breach of the account; it is a correctly scoped role doing exactly what it was scoped for. And the parent-token leg — the one that would have justified <code>S:C</code> — was not there. The score dropped six points because the evidence, read properly, was smaller than the story.</p>
 
       <h2 id="fix"><span class="ch">Chapter 7</span>The fix</h2>
 
@@ -284,10 +331,10 @@ Status: queued</code><button class="copy">copy</button></pre>
             <tr><td>Trial account, no payment method, one deploy</td><td>A free signup reaches code execution on the Serverless runtime</td></tr>
             <tr><td><code>/proc/self/environ</code> read in the function</td><td>The execution role's <code>ASIA…</code> key, secret and 1100-char session token are readable by user code</td></tr>
             <tr><td><code>parent_token_present: false</code> in the same response</td><td>The parent-token and account-takeover leg is absent — the run says so itself</td></tr>
-            <tr><td><code>sts:GetCallerIdentity</code> from a laptop</td><td>Credentials are valid off-host; account <code>606179966…</code>, role <code>lambda-role-execution</code></td></tr>
+            <tr><td><code>sts:GetCallerIdentity</code> from a laptop</td><td>Credentials are valid off-host; account <code>606…</code>, role <code>lambda-role-execution</code></td></tr>
             <tr><td><code>put-log-events</code> → <code>nextSequenceToken</code></td><td>One write allowed, scoped to the function's own log group</td></tr>
-            <tr><td>Number purchase <code>PNf07db6da…</code></td><td>One number bought with the account's own $15.50 promotional credit</td></tr>
-            <tr><td>SMS <code>SM3913456e…</code> → <code>queued</code>, then received</td><td>Delivery works, to a number verified on the same account</td></tr>
+            <tr><td>Number purchase <code>PN…</code></td><td>One number bought with the account's own $15.50 promotional credit</td></tr>
+            <tr><td>SMS <code>SM…</code> → <code>queued</code>, then received</td><td>Delivery works, to a number verified on the same account</td></tr>
             <tr><td>The received bubble, watermarked</td><td>“Sent from your Twilio trial account” — the spam and phishing leg is refuted by the capture</td></tr>
             <tr><td><a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a></td><td>The function, the deploy and fetch scripts, the three-way session-token control, the redactor with its self-test, and the masked transcripts</td></tr>
           </tbody>
@@ -297,8 +344,6 @@ Status: queued</code><button class="copy">copy</button></pre>
       <p>The harness behind this piece is public: <a href="https://github.com/shoo0lin/twilio-serverless-role-creds">shoo0lin/twilio-serverless-role-creds</a>. It holds the function that reads its own environment, the deploy and fetch scripts, the three-way session-token control, and a redactor with two commands worth running — <code>--self-test</code> checks the masking policy itself, and <code>--check</code> re-runs the policy over every published file in <code>evidence/</code> and fails if anything would change. Every value here is a fixed point of that policy, so the masking is something you can run rather than an edit you have to trust. What it does not hold is the raw bundle: that is a screen recording and a set of images with live credentials, full SIDs, a phone number and a handset screen in them. The repository runs against an account you own; nothing in it reaches a third party's tenant.</p>
 
       <p>The deployed endpoint from the run is not reproduced here either. It executes code as whatever role the platform assigns, and there is no reason to leave a working one in a public page.</p>
-
-      <p></p>
 
       <p>A severity is an argument, and an argument can be wrong in the direction of the person making it. The machines do not care how the report reads. They return what they return — a key that starts with <code>ASIA</code>, a boolean that says <code>false</code>, a message that announces its own trial status — and the job is to write down that, not the version of it that would look better on a leaderboard.</p>
 

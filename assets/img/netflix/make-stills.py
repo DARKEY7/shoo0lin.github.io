@@ -15,7 +15,7 @@ pixels wide - a symmetric pad clips the text we want to keep.
 
 from PIL import Image
 
-SRC = "/mnt/c/Users/DARKEY/Videos/Netflix-lock/Screenshot_2026-10-23_15-19-31.png"
+SRC = "/mnt/c/Users/<user>/Videos/Netflix-lock/Screenshot_2026-10-23_15-19-31.png"
 OUT = "/root/Docue/ppp/shoo0lin.github.io/assets/img/netflix"
 
 BAR = (17, 17, 17)  # #111 - reads as deliberate redaction, not a glitch

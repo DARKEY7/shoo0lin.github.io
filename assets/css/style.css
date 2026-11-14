@@ -284,7 +284,7 @@ a:hover { text-decoration: none; }
 }
 
 /* ---------- article body ---------- */
-.article { padding-block: clamp(44px, 5vw, 68px) clamp(56px, 7vw, 92px); }
+.article { padding-block: clamp(44px, 5vw, 68px) clamp(56px, 7vw, 92px); overflow-x: clip; }
 .article h2 {
   font-family: var(--sans); font-weight: 700;
   font-size: clamp(1.6rem, 2.6vw, 2.1rem); line-height: 1.12;
@@ -369,6 +369,22 @@ figure img, figure video {
 }
 figcaption { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: var(--faint); margin-top: 12px; }
 figcaption b { color: var(--text); font-weight: 600; }
+
+/* wide terminal captures: break out of the prose measure and pan on narrow screens */
+.figure-wide {
+  margin-left: 50%; transform: translateX(-50%);
+  width: min(1120px, calc(100vw - 2 * var(--frame-inset)));
+  max-width: none;
+}
+.figure-wide .pan {
+  overflow-x: auto; overflow-y: hidden;
+  border: 1px solid var(--line); border-radius: 2px;
+  background: var(--black); box-shadow: var(--shadow);
+}
+.figure-wide .pan img {
+  display: block; width: auto; max-width: none; height: auto;
+  border: 0; border-radius: 0; box-shadow: none; background: none;
+}
 
 /* tables */
 .table-wrap { overflow-x: auto; margin: 28px 0; border: 1px solid var(--line); border-radius: 0; }

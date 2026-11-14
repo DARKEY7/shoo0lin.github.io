@@ -22,7 +22,7 @@ out, which is why each still below frames one line of the flow.
 
 from PIL import Image
 
-SRC = "/mnt/c/Users/DARKEY/Videos/Unauthenticated Dynamic Client Registration enables OAuth account takeover"
+SRC = "/mnt/c/Users/<user>/Videos/Unauthenticated Dynamic Client Registration enables OAuth account takeover"
 OUT = "/root/Docue/ppp/shoo0lin.github.io/assets/img/adobe"
 
 BAR = (51, 51, 51)  # #333 - visible against dark chrome without shouting
